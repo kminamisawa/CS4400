@@ -66,11 +66,37 @@ static void run_group(script_group *group) {
   /* You'll have to make run_group do better than this, too */
   // if (group->repeats != 1)
   //   fail("only repeat 1 supported");
-  int i,j;
-  for (i = 0; i < group->repeats; i++){
-    for (j = 0; j < group->num_commands; j++){
+
+  script_var* var = group->commands->output_to;
+  if(var != NULL){
+    int i,j;
+    for (i = 0; i < group->repeats; i++){
+      for (j = 0; j < group->num_commands; j++){
+        pid_t pid = fork();
+        if(pid == 0){
+          Setpgid(0,0);
+          run_command(&group->commands[j]);
+        }else{
+            int status;
+            int status_val = 0;
+            Waitpid(pid, &status, 0);
+            if(WIFEXITED(status)){
+  					status_val = WEXITSTATUS(status);
+  				} else if(WIFSIGNALED(status)){
+  					status_val = WTERMSIG(status)*-1;
+  				} else if(WIFSTOPPED(status)){
+  					status_val = WSTOPSIG(status);
+  				}
+            set_var(var,status_val);
+        }
+      }
+    }
+  }else{
+    int i,j;
+    for (i = 0; i < group->repeats; i++){
       pid_t pid = fork();
       if(pid == 0){
+        Setpgid(0,0);
         run_command(&group->commands[j]);
       }else{
           int status;
@@ -78,6 +104,8 @@ static void run_group(script_group *group) {
       }
     }
   }
+
+
 
 
 
