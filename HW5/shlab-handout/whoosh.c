@@ -50,7 +50,17 @@ int main(int argc, char **argv) {
 
 static void run_script(script *scr) {
   if (scr->num_groups == 1) {
-    run_group(&scr->groups[0]);
+    //run_group(&scr->groups[0]);
+    int i;
+    for (i = 0; i < scr->groups[0].repeats; i++){
+      pid_t pid = fork();
+      if(pid == 0){
+        run_group(&scr->groups[0]);
+      }else{
+          int status;
+          Waitpid(pid, &status, 0);
+      }
+    }
   } else {
     int i,j;
     for (i = 0; i < scr->num_groups; i++) {
