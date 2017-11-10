@@ -51,29 +51,11 @@ int main(int argc, char **argv) {
 static void run_script(script *scr) {
   if (scr->num_groups == 1) {
     //run_group(&scr->groups[0]);
-    int i;
-    for (i = 0; i < scr->groups[0].repeats; i++){
-      pid_t pid = fork();
-      if(pid == 0){
-        run_group(&scr->groups[0]);
-      }else{
-          int status;
-          Waitpid(pid, &status, 0);
-      }
-    }
+    run_group(&scr->groups[0]);
   } else {
-    int i,j;
+    int i;
     for (i = 0; i < scr->num_groups; i++) {
-      for (j = 0; j < scr->groups[i].repeats; j++){
-        pid_t pid = fork();
-        if(pid == 0){
-          run_group(&scr->groups[i]);
-        }else{
-            int status;
-            Waitpid(pid, &status, 0);
-        }
-      }
-
+      run_group(&scr->groups[i]);
     }
     // /* You'll have to make run_script do better than this */
     // fail("only 1 group supported");
@@ -84,10 +66,24 @@ static void run_group(script_group *group) {
   /* You'll have to make run_group do better than this, too */
   // if (group->repeats != 1)
   //   fail("only repeat 1 supported");
-  int j;
-  for (j = 0; j < group->num_commands; j++) {
-    run_command(&group->commands[j]);
+  int i,j;
+  for (i = 0; i < group->repeats; i++){
+    for (j = 0; j < group->num_commands; j++){
+      pid_t pid = fork();
+      if(pid == 0){
+        run_command(&group->commands[j]);
+      }else{
+          int status;
+          Waitpid(pid, &status, 0);
+      }
+    }
   }
+
+
+
+  // for (j = 0; j < group->num_commands; j++) {
+  //   run_command(&group->commands[j]);
+  // }
   //
   // int j;
   // for (j = 0; j < group->num_commands; j++) {
@@ -118,12 +114,12 @@ static void run_command(script_command *command) {
   const char **argv;
   int i;
 
-  if (command->pid_to != NULL)
-    fail("setting process ID variable not supported");
-  if (command->input_from != NULL)
-    fail("input from variable not supported");
-  if (command->output_to != NULL)
-    fail("output to variable not supported");
+  // if (command->pid_to != NULL)
+  //   fail("setting process ID variable not supported");
+  // if (command->input_from != NULL)
+  //   fail("input from variable not supported");
+  // if (command->output_to != NULL)
+  //   fail("output to variable not supported");
 
   argv = malloc(sizeof(char *) * (command->num_arguments + 2));
   argv[0] = command->program;
