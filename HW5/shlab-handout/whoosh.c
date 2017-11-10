@@ -95,15 +95,17 @@ static void run_group(script_group *group) {
           // dup2(pipe_child2parent[WRITE], 1);
           // write_var_to(pipe_parent2child[WRITE], input);
           //write_var_to(fds[WRITE], input);
-
+          dup2(pipe_parent2child[READ], 0);
           Setpgid(0,0);
           run_command(&group->commands[j]);
+          if(group->commands[j].pid_to != 0)
+            set_var(group->commands[j].pid_to, pid);
           dup2(pipe_child2parent[WRITE], 1);
           write_var_to(pipe_parent2child[WRITE], input);
         }else{
             // Close(pipe_parent2child[READ]);
             // Close(pipe_child2parent[WRITE]);
-
+          //  set_var(group->commands[j].pid_to, 0);
             int status;
             int status_val = 0;
             //write_var_to(pipe_parent2child[WRITE], input);
@@ -123,8 +125,8 @@ static void run_group(script_group *group) {
     				} else if(WIFSTOPPED(status)){
     					status_val = WSTOPSIG(status);
     				}
-            set_var(output, status_val);
-            //read_to_var(fds[READ], var);
+
+            //read_to_var(pipe_parent2child[READ], pid);
         }
       }
     }
