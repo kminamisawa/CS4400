@@ -12,23 +12,6 @@ static void run_group(script_group *group);
 static void run_command(script_command *command);
 static void set_var(script_var *var, int new_value);
 
-/* You probably shouldn't change main at all. */
-
-int main(int argc, char **argv) {
-  script *scr;
-
-  if ((argc != 1) && (argc != 2)) {
-    fprintf(stderr, "usage: %s [<script-file>]\n", argv[0]);
-    exit(1);
-  }
-
-  scr = parse_script_file((argc > 1) ? argv[1] : NULL);
-
-  run_script(scr);
-
-  return 0;
-}
-
 // /* A parsed whoosh script: */
 // typedef struct {
 //   int num_groups;                 /* length of the `groups` array */
@@ -48,56 +31,59 @@ int main(int argc, char **argv) {
 // #define GROUP_AND    1
 // #define GROUP_OR     2
 
+/* You probably shouldn't change main at all. */
+
+int main(int argc, char **argv) {
+  script *scr;
+
+  if ((argc != 1) && (argc != 2)) {
+    fprintf(stderr, "usage: %s [<script-file>]\n", argv[0]);
+    exit(1);
+  }
+
+  scr = parse_script_file((argc > 1) ? argv[1] : NULL);
+
+  run_script(scr);
+
+  return 0;
+}
+
 static void run_script(script *scr) {
   if (scr->num_groups == 1) {
     run_group(&scr->groups[0]);
-  } else {
-    int i,j;
+  }else {
+    int i;
     for (i = 0; i < scr->num_groups; i++) {
-      for (j = 0; j < scr->groups[i].repeats; j++){
-        pid_t pid = fork();
-        if(pid == 0){
-          run_group(&scr->groups[i]);
-        }else{
-            int status;
-            Waitpid(pid, &status, 0);
-        }
+      pid_t pid = fork();
+      if(pid == 0){
+        run_group(&scr->groups[i]);
+        exit(0);
+      }else{
+        int iptr;
+        Waitpid(pid, &iptr, 0);
       }
-
     }
-    // /* You'll have to make run_script do better than this */
-    // fail("only 1 group supported");
+    exit(0);
+    //fail("only 1 group supported");
   }
 }
 
 static void run_group(script_group *group) {
   /* You'll have to make run_group do better than this, too */
-  // if (group->repeats != 1)
-  //   fail("only repeat 1 supported");
-  int j;
-  for (j = 0; j < group->num_commands; j++) {
-    run_command(&group->commands[j]);
+  if (group->repeats != 1)
+    fail("only repeat 1 supported");
+
+  if (group->num_commands == 1) {
+    run_command(&group->commands[0]);
+  } else {
+    int i;
+    for (i = 0; i < group->num_commands; i++) {
+      /* code */
+      run_command(&group->commands[i]);
+    }
+    // /* And here */
+    // fail("only 1 command supported");
   }
-  //
-  // int j;
-  // for (j = 0; j < group->num_commands; j++) {
-  //   run_command(&group->commands[j]);
-  // }
-  // if (group->num_commands == 1) {
-  //   int i;
-  //   for (i = 0; i < group->num_commands; i++) {
-  //     pid_t pid = fork();
-  //     if(pid == 0){
-  //       run_command(&group->commands[i]);
-  //     }else{
-  //       int itpr;
-  //       Waitpid(pid, &itpr, 0);
-  //     }
-  //   }
-  // } else {
-  //   /* And here */
-  //   fail("only 1 command supported");
-  // }
 }
 
 /* This run_command function is a good start, but note that it runs
