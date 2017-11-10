@@ -96,11 +96,12 @@ static void run_group(script_group *group) {
           // write_var_to(pipe_parent2child[WRITE], input);
           //write_var_to(fds[WRITE], input);
           dup2(pipe_parent2child[READ], 0);
+          dup2(pipe_child2parent[WRITE], 1);
           Setpgid(0,0);
           run_command(&group->commands[j]);
           if(group->commands[j].pid_to != 0)
             set_var(group->commands[j].pid_to, pid);
-          dup2(pipe_child2parent[WRITE], 1);
+
           write_var_to(pipe_parent2child[WRITE], input);
         }else{
             // Close(pipe_parent2child[READ]);
