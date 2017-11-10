@@ -7,10 +7,15 @@
 #include "ast.h"
 #include "fail.h"
 
+#define READ  (0)
+#define WRITE (1)
+
 static void run_script(script *scr);
 static void run_group(script_group *group);
 static void run_command(script_command *command);
 static void set_var(script_var *var, int new_value);
+static void read_to_var(int fd, script_var *var);
+static void write_var_to(int fd, script_var *var);
 
 /* You probably shouldn't change main at all. */
 
@@ -67,37 +72,69 @@ static void run_group(script_group *group) {
   // if (group->repeats != 1)
   //   fail("only repeat 1 supported");
 
-  script_var* var = group->commands->output_to;
-  if(var != NULL){
+  script_var* output = group->commands->output_to;
+  script_var* input = group->commands->input_from;
+
+  if(output != NULL){
     int i,j;
     for (i = 0; i < group->repeats; i++){
       for (j = 0; j < group->num_commands; j++){
+        //  pid_t pid = fork();
+        int pipe_child2parent[2];
+        int pipe_parent2child[2];
+
+        Pipe(pipe_child2parent);
+        Pipe(pipe_parent2child);
+
         pid_t pid = fork();
         if(pid == 0){
+          Close(pipe_parent2child[WRITE]);
+          Close(pipe_child2parent[READ]);
+
+          // dup2(pipe_parent2child[READ], 0);
+          // dup2(pipe_child2parent[WRITE], 1);
+          // write_var_to(pipe_parent2child[WRITE], input);
+          //write_var_to(fds[WRITE], input);
+
           Setpgid(0,0);
           run_command(&group->commands[j]);
+          dup2(pipe_child2parent[WRITE], 1);
+          write_var_to(pipe_parent2child[WRITE], input);
         }else{
+            // Close(pipe_parent2child[READ]);
+            // Close(pipe_child2parent[WRITE]);
+
             int status;
             int status_val = 0;
+            //write_var_to(pipe_parent2child[WRITE], input);
+
             Waitpid(pid, &status, 0);
+            Close(pipe_parent2child[READ]);
+            Close(pipe_child2parent[WRITE]);
+
+            read_to_var(pipe_child2parent[READ], output);
+            // write_var_to(pipe_parent2child[WRITE], input);
+            //write_var_to()
+
             if(WIFEXITED(status)){
   					status_val = WEXITSTATUS(status);
-  				} else if(WIFSIGNALED(status)){
-  					status_val = WTERMSIG(status)*-1;
-  				} else if(WIFSTOPPED(status)){
-  					status_val = WSTOPSIG(status);
-  				}
-            set_var(var,status_val);
+    				} else if(WIFSIGNALED(status)){
+    					status_val = WTERMSIG(status)*-1;
+    				} else if(WIFSTOPPED(status)){
+    					status_val = WSTOPSIG(status);
+    				}
+            set_var(output, status_val);
+            //read_to_var(fds[READ], var);
         }
       }
     }
   }else{
-    int i,j;
+    int i;
     for (i = 0; i < group->repeats; i++){
       pid_t pid = fork();
       if(pid == 0){
         Setpgid(0,0);
-        run_command(&group->commands[j]);
+        run_command(&group->commands[0]);
       }else{
           int status;
           Waitpid(pid, &status, 0);
