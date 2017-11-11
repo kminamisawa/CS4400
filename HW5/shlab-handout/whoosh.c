@@ -10,6 +10,10 @@
 #define READ  (0)
 #define WRITE (1)
 
+typedef int bool;
+#define true 1
+#define false 0
+
 static void run_script(script *scr);
 static void run_group(script_group *group);
 static void run_command(script_command *command);
@@ -86,49 +90,100 @@ static void run_group(script_group *group) {
         Pipe(pipe_child2parent);
         Pipe(pipe_parent2child);
 
+        // if(group->commands[j].input_from != 0){
+        //   set_var(group->commands[j].input_from, pipe_parent2child[READ]);
+        // }
+        //
+        // if(group->commands[j].output_to != 0){
+        //   set_var(group->commands[j].output_to, pipe_child2parent[WRITE]);
+        // }
+
+        //int input = 0;
+        if(input != NULL){
+          write_var_to(pipe_parent2child[WRITE], input);
+          Close(pipe_parent2child[WRITE]);
+        }
+
         pid_t pid = fork();
         if(pid == 0){
+
+          // 子プロセスの場合は、親→子への書き込みはありえないのでcloseする
           Close(pipe_parent2child[WRITE]);
-          Close(pipe_child2parent[READ]);
 
-          // dup2(pipe_parent2child[READ], 0);
-          // dup2(pipe_child2parent[WRITE], 1);
-          // write_var_to(pipe_parent2child[WRITE], input);
-          //write_var_to(fds[WRITE], input);
-          dup2(pipe_parent2child[READ], 0);
-          dup2(pipe_child2parent[WRITE], 1);
-          Setpgid(0,0);
+          // 子プロセスの場合は、子→親の読み込みはありえないのでcloseする
+          Close(pipe_child2parent[READ]);//
+
+          // 親→子への出力を標準入力として割り当て
+          Dup2(pipe_parent2child[READ], 0); // INPUT
+          Close(pipe_parent2child[READ]);
+           // 子→親への入力を標準出力に割り当て
+          Dup2(pipe_child2parent[WRITE], 1); //KEEP THIS
+          Close(pipe_child2parent[WRITE]);
+          // run_command(&group->commands[j]);
+
           run_command(&group->commands[j]);
-          if(group->commands[j].pid_to != 0)
-            set_var(group->commands[j].pid_to, pid);
 
-          write_var_to(pipe_parent2child[WRITE], input);
-        }else{
-            // Close(pipe_parent2child[READ]);
-            // Close(pipe_child2parent[WRITE]);
-          //  set_var(group->commands[j].pid_to, 0);
+          //Close(pipe_parent2child[READ]);
+
+          // Close(pipe_parent2child[READ]);
+          // Close(pipe_child2parent[READ]);
+
+          Setpgid(0,0);
+          //set_var(group->commands[j].pid_to, pid);
+          // run_command(&group->commands[j]);
+
+
+          // Close(pipe_parent2child[READ]);
+          // Close(pipe_child2parent[READ]);
+          // if (group->commands[j].input_from != NULL){
+          //   set_var(group->commands[j].input_from, pipe_parent2child[READ]);
+          // }
+          //write_var_to(pipe_parent2child[READ], input);
+        }
+        if(group->commands[j].pid_to != NULL){
+          set_var(group->commands[j].pid_to, pid);
+        }
             int status;
             int status_val = 0;
             //write_var_to(pipe_parent2child[WRITE], input);
-
-            Waitpid(pid, &status, 0);
+            Close(pipe_parent2child[WRITE]);
             Close(pipe_parent2child[READ]);
             Close(pipe_child2parent[WRITE]);
 
-            read_to_var(pipe_child2parent[READ], output);
             // write_var_to(pipe_parent2child[WRITE], input);
-            //write_var_to()
 
-            if(WIFEXITED(status)){
-  					status_val = WEXITSTATUS(status);
-    				} else if(WIFSIGNALED(status)){
-    					status_val = WTERMSIG(status)*-1;
-    				} else if(WIFSTOPPED(status)){
-    					status_val = WSTOPSIG(status);
-    				}
+            Waitpid(pid, &status, 0);
 
-            //read_to_var(pipe_parent2child[READ], pid);
-        }
+            read_to_var(pipe_child2parent[READ], output);
+            Close(pipe_child2parent[READ]);
+            // write_var_to(pipe_child2parent[WRITE], input);
+
+
+            //Close(pipe_child2parent[WRITE]);
+
+
+            // if(temp)
+            //   write_var_to(pipe_parent2child[WRITE], input);  // KINDA POSITIVE THIS IS NEEDED TO FOR SENING INPUT
+
+
+            //set_var(group->commands[j].input_from, input);
+          //  write_var_to(pipe_child2parent[READ], input);
+
+            // if(input != NULL){
+            //   write_var_to(pipe_parent2child[WRITE], input);
+            // }
+            //
+            // if(WIFEXITED(status)){
+  					//   status_val = WEXITSTATUS(status);
+            //   set_var(output, status_val);
+    				// } else if(WIFSIGNALED(status)){
+    				// 	status_val = WTERMSIG(status)*-1;
+            //   set_var(output, status_val);
+    				// } else if(WIFSTOPPED(status)){
+    				// 	status_val = WSTOPSIG(status);
+            //   set_var(output, status_val);
+    				// }
+
       }
     }
   }else{
