@@ -156,34 +156,16 @@ static void run_group(script_group *group) {
               //write_var_to(pipe_parent2child[WRITE], input);
               Close(pipe_parent2child[READ]);
               Close(pipe_child2parent[WRITE]);
-            //  Close(pipe_parent2child[WRITE]);
-
-              // write_var_to(pipe_parent2child[WRITE], input);
 
               Waitpid(pid, &status, 0);
 
               read_to_var(pipe_child2parent[READ], output);
               Close(pipe_child2parent[READ]);
 
-              // if(pipe_child2parent[1] != -1){
-              //   Close(pipe_child2parent[1]);
-              //   pipe_child2parent[1]=-1;
-              // }
-
               if(pipe_parent2child[1] != 1 ){
-                //dup2(pipe_parent2child[0],1);
-                // if(pipe_child2parent[1] != -1){
-                //   Close(pipe_child2parent[1]);
-                //   pipe_child2parent[1]=-1;
-                // }
                 pipe_parent2child[1] =1;
                 write_var_to(pipe_parent2child[WRITE], output);
-                // if(pipe_child2parent[1] != -1){
-                //   Close(pipe_child2parent[1]);
-                //   pipe_child2parent[1]=-1;
-                // }
                 pipe_parent2child[1] = 0;
-              //  Close(pipe_parent2child[0]);
               }
               //write_var_to(pipe_parent2child[WRITE], input);
               Close(pipe_parent2child[WRITE]);
