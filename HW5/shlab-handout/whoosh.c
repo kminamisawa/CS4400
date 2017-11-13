@@ -8,14 +8,14 @@
 #include "fail.h"
 #include <string.h>
 
-
-
 #define READ  (0)
 #define WRITE (1)
 
 static void run_script(script *scr);
 
 static void run_group(script_group *group);
+
+static void run_and_group(script_group *group);
 
 static void run_command(script_command *command);
 
@@ -68,7 +68,16 @@ static void run_script(script *scr) {
     } else {
         int i;
         for (i = 0; i < scr->num_groups; i++) {
-            run_group(&scr->groups[i]);
+            int mode = scr->groups[i].mode;
+            if(mode == GROUP_SINGLE){
+              run_group(&scr->groups[i]);
+            }else if (mode == GROUP_OR){
+              //run_group(&scr->groups[i]);
+            }else if (mode == GROUP_AND){
+              run_and_group(&scr->groups[i]);
+            }else{
+              break;
+            }
         }
         // /* You'll have to make run_script do better than this */
         // fail("only 1 group supported");
@@ -76,18 +85,12 @@ static void run_script(script *scr) {
 }
 
 static void run_group(script_group *group) {
-    /* You'll have to make run_group do better than this, too */
-    // if (group->repeats != 1)
-    //   fail("only repeat 1 supported");
-
     script_var *output = group->commands->output_to;
     script_var *input = group->commands->input_from;
 
-//    if(output != NULL){
     int i, j;
     for (i = 0; i < group->repeats; i++) {
         for (j = 0; j < group->num_commands; j++) {
-            //  pid_t pid = fork();
             int pipe_child2parent[2];
             int pipe_parent2child[2];
 
@@ -98,7 +101,8 @@ static void run_group(script_group *group) {
             if (pid == 0) {
 
                 if (output != NULL) {
-                    Dup2(pipe_child2parent[WRITE], 1);
+                    // 子→親への入力を標準出力に割り当て
+                    Dup2(pipe_child2parent[WRITE], 1); //KEEP THIS
 
                     // 子プロセスの場合は、親→子への書き込みはありえないのでcloseする
                     Close(pipe_parent2child[WRITE]);
@@ -124,52 +128,23 @@ static void run_group(script_group *group) {
 
                     Close(pipe_child2parent[WRITE]);
                     Close(pipe_child2parent[READ]);
-//                    close(0);
                 }
 
                 run_command(&group->commands[j]);
                 if (group->commands[j].pid_to != 0) {
                     set_var(group->commands[j].pid_to, pid);
                 }
-                //  write_var_to(pipe_parent2child[WRITE], input);
             } else {
-                // Close(pipe_parent2child[READ]);
-                // Close(pipe_child2parent[WRITE]);
-                //  set_var(group->commands[j].pid_to, 0);
                 int status;
 
                 int status_val = 0;
-                //write_var_to(pipe_parent2child[WRITE], input);
 
-                // write_var_to(pipe_parent2child[WRITE], input);
-                // set_var(group->commands[j].input_from, pid);
                 Close(pipe_parent2child[WRITE]);
 
                 Close(pipe_child2parent[WRITE]);
                 Close(pipe_parent2child[READ]);
 
                 Waitpid(pid, &status, 0);
-
-
-                if (input != NULL) {
-
-//                    write_var_to(0, input);
-//                    run_command(&group->commands[j]);
-                }
-//                Close(pipe_parent2child[READ]);
-//                Close(pipe_child2parent[WRITE]);
-
-//                 if (output != NULL) {
-//                     if (status != 0 && output != 0) {
-//                         set_var(output,WEXITSTATUS(status));
-//                     }else
-//                         read_to_var(pipe_child2parent[READ], output);
-// //                    Close(pipe_child2parent[READ]);
-//                 }
-
-
-                //write_var_to()
-
                 if (WIFEXITED(status)) {
                     status_val = WEXITSTATUS(status);
                 } else if (WIFSIGNALED(status)) {
@@ -180,69 +155,96 @@ static void run_group(script_group *group) {
 
                 if (output != NULL) {
                     if (status != 0 && output != 0) {
-                        // if(status == 0){
-                        //   set_var(output, SIGCHLD);
-                        // }else{
-                        //   set_var(output, WEXITSTATUS(status));
-                        // }
                         set_var(output, status_val);
-                        //set_var(output,WEXITSTATUS(status_val));
                     }else
                         read_to_var(pipe_child2parent[READ], output);
-//                    Close(pipe_child2parent[READ]);
                 }
-
-        		    // set_var(output, status_val);
-
-                //read_to_var(pipe_parent2child[READ], pid);
             }
         }
     }
-//    }else{
-//        int i;
-//        for (i = 0; i < group->repeats; i++){
-//            pid_t pid = fork();
-//            if(pid == 0){
-//                Setpgid(0,0);
-//                run_command(&group->commands[0]);
-//            }else{
-//                int status;
-//                Waitpid(pid, &status, 0);
-//                run_command(&group->commands[0]);
-//
-//                printf("tt");
-//            }
-//        }
-//    }
-
-
-
-
-
-    // for (j = 0; j < group->num_commands; j++) {
-    //   run_command(&group->commands[j]);
-    // }
-    //
-    // int j;
-    // for (j = 0; j < group->num_commands; j++) {
-    //   run_command(&group->commands[j]);
-    // }
-    // if (group->num_commands == 1) {
-    //   int i;
-    //   for (i = 0; i < group->num_commands; i++) {
-    //     pid_t pid = fork();
-    //     if(pid == 0){
-    //       run_command(&group->commands[i]);
-    //     }else{
-    //       int itpr;
-    //       Waitpid(pid, &itpr, 0);
-    //     }
-    //   }
-    // } else {
-    //   /* And here */
-    //   fail("only 1 command supported");
-    // }
 }
+
+static void run_and_group(script_group *group) {
+  // script_var *output = group->commands->output_to;
+  // script_var *input = group->commands->input_from;
+
+  int i, j;
+  for (i = 0; i < group->repeats; i++) {
+    script_var *output = group->commands->output_to;
+    script_var *input = group->commands->input_from;
+      for (j = 0; j < group->num_commands; j++) {
+          int pipe_child2parent[2];
+          int pipe_parent2child[2];
+
+          Pipe(pipe_child2parent);
+          Pipe(pipe_parent2child);
+
+          pid_t pid = fork();
+          if (pid == 0) {
+              if (output != NULL) {
+                  // 子→親への入力を標準出力に割り当て
+                  Dup2(pipe_child2parent[WRITE], 1); //KEEP THIS
+
+                  // 子プロセスの場合は、親→子への書き込みはありえないのでcloseする
+                  Close(pipe_parent2child[WRITE]);
+
+                  // 子プロセスの場合は、子→親の読み込みはありえないのでcloseする
+                  Close(pipe_parent2child[READ]);
+
+//                    close(pipe_child2parent[WRITE]);
+                  Close(pipe_child2parent[READ]);
+              }
+
+
+              if (input != NULL) {
+//                    dup2(pipe_child2parent[WRITE], 1);
+//                    printf("rrrr");
+
+                  write_var_to(pipe_child2parent[WRITE], input);
+                  // 親→子への出力を標準入力として割り当て
+                  Dup2(pipe_child2parent[READ], 0);
+
+                  Close(pipe_parent2child[WRITE]);
+                  Close(pipe_parent2child[READ]);
+
+                  Close(pipe_child2parent[WRITE]);
+                  Close(pipe_child2parent[READ]);
+              }
+
+              run_command(&group->commands[j]);
+              if (group->commands[j].pid_to != 0) {
+                  set_var(group->commands[j].pid_to, pid);
+              }
+          } else {
+              int status;
+
+              int status_val = 0;
+
+              Close(pipe_parent2child[WRITE]);
+
+              Close(pipe_child2parent[WRITE]);
+              Close(pipe_parent2child[READ]);
+
+              Waitpid(pid, &status, 0);
+              if (WIFEXITED(status)) {
+                  status_val = WEXITSTATUS(status);
+              } else if (WIFSIGNALED(status)) {
+                  status_val = WTERMSIG(status) * -1;
+              } else if (WIFSTOPPED(status)) {
+                  status_val = WSTOPSIG(status);
+              }
+
+              if (output != NULL) {
+                  if (status != 0 && output != 0) {
+                      set_var(output, status_val);
+                  }else
+                      read_to_var(pipe_child2parent[READ], output);
+              }
+          }
+      }
+  }
+}
+
 
 /* This run_command function is a good start, but note that it runs
    the command as a replacement for the `whoosh` script, instead of
