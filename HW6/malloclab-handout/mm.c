@@ -51,7 +51,7 @@
 
 /* Slide page 80 */
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
-#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp)- BLOCK_HEADER))
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp)- OVERHEAD))
 
 /* Slide page 28 on More on memory allocation*/
 #define PUT(p, value)  (*(int *)(p) = (value))
@@ -365,53 +365,55 @@ void mm_free(void *ptr)
     // printf("%s\n", "mm_free called");
     GET_ALLOC(HDRP(ptr)) = 0;
     //printf("%s\n", "mm_free called");
-    //GET_ALLOC(FTRP(ptr)) = 0;
+    GET_ALLOC(FTRP(ptr)) = 0;
     // // printf("%s\n", "mm_free called");
-    //coalesce(ptr);
+    coalesce(ptr);
 
-    // void *prev = HDRP(PREV_BLKP(ptr));
-    // void *next = HDRP(NEXT_BLKP(ptr));
-    //
-    // size_t unmap_size = PAGE_ALIGN(GET_SIZE(HDRP(ptr)) + OVERHEAD + BLOCK_HEADER + PG_SIZE);
-    // void * page_start = ptr - OVERHEAD - BLOCK_HEADER - PG_SIZE;
-    // //printf("unmap_size :%ld\n",unmap_size);
-    //
-    // //Terminator block is next. Prologue block is prev.
-    // if(GET_SIZE(next) == 0 && GET_SIZE(prev) == OVERHEAD)
-    // {
-    //   //Un hook page from page linked list.
-    //   void *pg = first_pg;
-    //   while(pg != page_start)
-    //   {
-    //     pg = NEXT_PAGE(pg);
-    //   }
-    //
-    //   //page to remove is page linked list head
-    //   if(pg == first_pg)
-    //   {
-    //     //About to remove first page.
-    //     if(NEXT_PAGE(first_pg) == NULL && PREV_PAGE(first_pg) == NULL)
-    //       return;
-    //
-    //     PREV_PAGE(NEXT_PAGE(first_pg)) = NULL;
-    //     first_pg = current_avail =  NEXT_PAGE(first_pg);
-    //   }
-    //   else if(NEXT_PAGE(pg) != NULL && PREV_PAGE(pg) != NULL)
-    //   {
-    //     PREV_PAGE(NEXT_PAGE(pg)) = PREV_PAGE(pg);
-    //     NEXT_PAGE(PREV_PAGE(pg)) = NEXT_PAGE(pg);
-    //   }
-    //   else
-    //   {
-    //     NEXT_PAGE(PREV_PAGE(pg)) = NULL;
-    //   }
-    //
-    //   last_pg = NULL;
-    //   current_block = NULL;
-    //
-    //   mem_unmap(page_start,unmap_size);
-    // }
-    //     printf("%s\n", "mm_free called");
+    printf("%s\n", "up tp cpalesce sucessed in mm_free");
+    void *prev = HDRP(PREV_BLKP(ptr));
+    void *next = HDRP(NEXT_BLKP(ptr));
+
+    size_t unmap_size = PAGE_ALIGN(GET_SIZE(HDRP(ptr)) + OVERHEAD + BLOCK_HEADER + PG_SIZE);
+    void * page_start = ptr - OVERHEAD - BLOCK_HEADER - PG_SIZE;
+    //printf("unmap_size :%ld\n",unmap_size);
+printf("%s\n", "up tp page_start in mm_free");
+    //Terminator block is next. Prologue block is prev.
+    if(GET_SIZE(next) == 0 && GET_SIZE(prev) == OVERHEAD)
+    {
+      //Un hook page from page linked list.
+      void *pg = first_pg;
+      printf("%s\n", "up tp pg=first page in mm_free");
+      while(pg != page_start)
+      {
+        pg = NEXT_PAGE(pg);
+      }
+      //page to remove is page linked list head
+      if(pg == first_pg)
+      {
+        //About to remove first page.
+        printf("%s\n", "up tp pg == first_pg in mm_free");
+        if(NEXT_PAGE(first_pg) == NULL && PREV_PAGE(first_pg) == NULL)
+          return;
+
+        PREV_PAGE(NEXT_PAGE(first_pg)) = NULL;
+        first_pg = current_avail =  NEXT_PAGE(first_pg);
+      }
+      else if(NEXT_PAGE(pg) != NULL && PREV_PAGE(pg) != NULL)
+      {
+        PREV_PAGE(NEXT_PAGE(pg)) = PREV_PAGE(pg);
+        NEXT_PAGE(PREV_PAGE(pg)) = NEXT_PAGE(pg);
+      }
+      else
+      {
+        NEXT_PAGE(PREV_PAGE(pg)) = NULL;
+      }
+
+      last_pg = NULL;
+      current_block = NULL;
+
+      mem_unmap(page_start,unmap_size);
+    }
+        printf("%s\n", "mm_free called");
 }
 
 /* Check the allignment of the blcok
@@ -450,14 +452,14 @@ bool check_block_size (void* bp){
 */
 bool check_allocation (void* bp){
   // Allocation must be either 0 or 1. (header)
-  if (GET_ALLOC(HDRP(bp)) != 0 && GET_ALLOC(HDRP(bp)) != 0){
+  if (GET_ALLOC(HDRP(bp)) != 0 && GET_ALLOC(HDRP(bp)) != 1){
     return false;
   }
 
-  // Allocation must be either 0 or 1. (footer)
-  if (GET_ALLOC(FTRP(bp)) != 0 && GET_ALLOC(FTRP(bp)) != 0){
-    return false;
-  }
+  // // Allocation must be either 0 or 1. (footer)
+  // if (GET_ALLOC(FTRP(bp)) != 0 && GET_ALLOC(FTRP(bp)) != 1){
+  //   return false;
+  // }
 
   // Allocation must match for footer and header
   if (GET_ALLOC(HDRP(bp)) == 0 && GET_ALLOC(FTRP(bp)) != 0){
@@ -478,6 +480,7 @@ bool check_allocation (void* bp){
  */
 int mm_check()
 {
+  printf("%s\n", "mm_check called.");
   void* current_pg = first_pg;
   void *current_bp;
 
@@ -530,8 +533,8 @@ int mm_check()
         printf("%s\n", "Called 6");
         return 0;
       }
-
-      // Make sure colleace happened.
+      printf("%s\n", "mm_check sucess so far.");
+      //Make sure colleace happened.
       if (GET_ALLOC(HDRP(PREV_BLKP(current_bp))) == 0 && GET_ALLOC(HDRP(current_bp)) == 0){
         printf("%s\n", "Called 7");
         return 0;
@@ -573,6 +576,7 @@ int mm_check()
     next_page = next_page->next;
     current_pg = next_page;
   }
+    printf("%s\n", "mm_check sucess.");
   return 1;
 }
 
@@ -582,6 +586,7 @@ int mm_check()
  */
 int mm_can_free(void *p)
 {
+  printf("%s\n", "mm_can_free called.");
   if(!check_allignment(p)){
     return 0;
   }
@@ -632,5 +637,6 @@ int mm_can_free(void *p)
     return false;
   }
 
+  printf("%s\n", "mm_can_free sucess.");
   return 1;
 }
