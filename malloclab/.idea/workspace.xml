@@ -44,8 +44,8 @@
       <file leaf-file-name="mm.c" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/mm.c">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="850">
-              <caret line="297" column="1" selection-start-line="297" selection-start-column="1" selection-end-line="297" selection-end-column="1" />
+            <state relative-caret-position="136">
+              <caret line="534" column="43" selection-start-line="534" selection-start-column="43" selection-end-line="534" selection-end-column="43" />
               <folding />
             </state>
           </provider>
@@ -326,7 +326,7 @@
       <envs />
       <method />
     </configuration>
-    <configuration default="false" name="mdriver" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-l -t /Users/kojiminamisawa/Dropbox/UofU/Fall_2017/CS4400/CADE/malloclab/traces -n traces/short1-bal.rep" WORKING_DIR="" PASS_PARENT_ENVS_2="true" PROJECT_NAME="malloclab" TARGET_NAME="malloclab" CONFIG_NAME="Debug" RUN_PATH="$PROJECT_DIR$/mdriver">
+    <configuration default="false" name="mdriver" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-l -t /Users/kojiminamisawa/Dropbox/UofU/Fall_2017/CS4400/CADE/malloclab/traces traces/short1-bal.rep" WORKING_DIR="" PASS_PARENT_ENVS_2="true" PROJECT_NAME="malloclab" TARGET_NAME="malloclab" CONFIG_NAME="Debug" RUN_PATH="$PROJECT_DIR$/mdriver">
       <envs />
       <method />
     </configuration>
@@ -347,12 +347,12 @@
       <option name="presentableId" value="Default" />
       <updated>1511609432822</updated>
       <workItem from="1511609434323" duration="3984000" />
-      <workItem from="1511614167194" duration="3724000" />
+      <workItem from="1511614167194" duration="4709000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="7708000" />
+    <option name="totallyTimeSpent" value="8693000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="4" y="23" width="1676" height="1027" extended-state="6" />
@@ -394,14 +394,19 @@
       <breakpoints>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/mm.c</url>
-          <line>191</line>
+          <line>212</line>
           <option name="timeStamp" value="14" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
+          <url>file://$PROJECT_DIR$/mm.c</url>
+          <line>535</line>
+          <option name="timeStamp" value="15" />
         </line-breakpoint>
       </breakpoints>
       <breakpoints-dialog>
         <breakpoints-dialog />
       </breakpoints-dialog>
-      <option name="time" value="15" />
+      <option name="time" value="16" />
     </breakpoint-manager>
     <watches-manager>
       <configuration name="CMakeRunConfiguration">
@@ -499,8 +504,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/mm.c">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="850">
-          <caret line="297" column="1" selection-start-line="297" selection-start-column="1" selection-end-line="297" selection-end-column="1" />
+        <state relative-caret-position="136">
+          <caret line="534" column="43" selection-start-line="534" selection-start-column="43" selection-end-line="534" selection-end-column="43" />
           <folding />
         </state>
       </provider>
