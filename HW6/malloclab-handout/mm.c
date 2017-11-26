@@ -457,21 +457,82 @@ int mm_check()
     // Iterate through the blocks now. Slide pg 33.
     while (GET_SIZE(HDRP(current_bp)) != 0){
       // Make sure header of the next block is properly allocated.
-      if (ptr_is_mapped(current_bp - BLOCK_HEADER, BLOCK_HEADER) == false){
+      if (!ptr_is_mapped(current_bp - BLOCK_HEADER, BLOCK_HEADER)){
         return 0;
       }
 
+      // Check allignment of the block.
       if (!check_allignment(current_bp)){
         return 0;
       }
 
-      if (ptr_is_mapped(HDRP(current_bp), GET_SIZE(HDRP(current_bp))) == false){
+      // Check the allignment of the block at footer.
+      if (!check_allignment(FTRP(current_bp))){
         return 0;
       }
 
+      // Size of the header and footer must match in this implementation.
+      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE(current_bp)){
+        return 0;
+      }
+
+      // Make sure colleace happened.
+      if (GET_ALLOC(HDRP(PREV_BLKP(current_bp))) == 0 && GET_ALLOC(HDRP(current_bp)) == 0){
+        return 0;
+      }
+
+      // Check proper amount of space is allocated for header.
+      if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE(HDRP(current_bp)))){
+        return 0;
+      }
+
+      // Check proper amount of space is allocated for footer.
+      if (!ptr_is_mapped(FTRP(current_bp), GET_SIZE(FTRP(current_bp)))){
+        return 0;
+      }
+
+      // Make sure block is not too small nor too big.
+      if (GET_SIZE(HDRP(current_bp)) < 3 * BLOCK_HEADER ||
+        GET_SIZE(HDRP(current_bp)) > (size_t) MAX_BLOCK_SIZE){
+        return 0;
+      }
+
+      // Make sure block is not too small nor too big.
+      if (GET_SIZE(FTRP(current_bp)) < 3 * BLOCK_HEADER ||
+        GET_SIZE(FTRP(current_bp)) > (size_t) MAX_BLOCK_SIZE){
+        return 0;
+      }
+
+      // Make sure header and footer has the same size, which it should be.
+      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE(FTRP(current_bp))){
+        return 0;
+      }
+
+      // Allocation must be either 0 or 1. (header)
+      if (GET_ALLOC(HDRP(current_bp)) != 0 && GET_ALLOC(HDRP(current_bp)) != 0){
+        return 0;
+      }
+
+      // Allocation must be either 0 or 1. (footer)
+      if (GET_ALLOC(FTRP(current_bp)) != 0 && GET_ALLOC(FTRP(current_bp)) != 0){
+        return 0;
+      }
+
+      // Allocation must match for footer and header
+      if (GET_ALLOC(HDRP(current_bp)) == 0 && GET_ALLOC(FTRP(current_bp)) != 0){
+        return 0;
+      }
+
+      // Allocation must match for footer and header
+      if (GET_ALLOC(HDRP(current_bp)) == 1 && GET_ALLOC(FTRP(current_bp)) != 1){
+        return 0;
+      }
 
       current_bp = NEXT_BLKP(current_bp); //Move on to the next block
     }
+    page* next_page = (page*) current_pg;
+    next_page = next_page->next;
+    current_pg = next_page;
   }
   return 1;
 }
