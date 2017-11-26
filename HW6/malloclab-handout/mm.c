@@ -85,8 +85,8 @@ int ptr_is_mapped(void *p, size_t len) {
 
 typedef struct
 {
-  void *next;
-  void *prev;
+  struct page *prev;
+  struct page *next;
   size_t size;
   size_t filler;
 } page;
@@ -207,7 +207,7 @@ void* extend (size_t new_size){
   }else{
     pgsz_mult = extend_count >> 3;
   }
-  printf("extend count: %d\nmem_heap() %ld\n", extend_count, mem_pagesize());
+  //printf("extend count: %d\nmem_heap() %ld\n", extend_count, mem_pagesize());
   extend_count++;
 
   int clampedSize = new_size > (pgsz_mult * mem_pagesize()) ? new_size : pgsz_mult * mem_pagesize();
@@ -219,13 +219,13 @@ void* extend (size_t new_size){
   page *current_pg = first_pg;
   while(current_pg->next != NULL)
   {
-   current_pg = current_pg->next;
+   current_pg = (page*) current_pg->next;
   }
 
   current_pg->next = new_page;
-  page* next_page = current_pg->next;
+  page* next_page = (page*) current_pg->next;
   next_page->next = NULL;
-  next_page->prev = current_pg;
+  next_page->prev = (struct page*)current_pg;
   next_page->size = chunk_size;
   current_avail = next_page;
   // NEXT_PAGE(NEXT_PAGE(current_pg)) = NULL;
@@ -630,7 +630,7 @@ int mm_check()
     }
     // printf("%s\n", "mm_check so far.");
     page* next_page = (page*) current_pg;
-    next_page = next_page->next;
+    next_page = (page*) next_page->next;
     current_pg = next_page;
   }
     // printf("%s\n", "mm_check sucess.");
