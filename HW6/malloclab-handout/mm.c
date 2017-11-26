@@ -53,9 +53,18 @@
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp)- BLOCK_HEADER))
 
+/* Slide page 28 on More on memory allocation*/
+#define PUT(p, value)  (*(int *)(p) = (value))
+#define PACK(size, alloc)  ((size) | (alloc))
+
 #define NEXT_PAGE(pg) (((page *)pg)->next)
 #define PREV_PAGE(pg) (((page *)pg)->prev)
 #define PAGE_SIZE(pg) (((page *)pg)->size)
+
+typedef int bool;
+#define true 1
+#define false 0
+
 int extend_count = 0;
 
 /*From course website
@@ -115,6 +124,26 @@ void set_allocated(void *bp, size_t size)
  GET_ALLOC(FTRP(bp)) = 1;
 }
 
+void mm_init_helper(){
+  first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
+  current_block = first_block_payload;
+
+  GET_SIZE(HDRP(first_block_payload)) = OVERHEAD;
+  GET_ALLOC(HDRP(first_block_payload)) = 1; //Set allocated.
+  GET_SIZE(FTRP(first_block_payload)) = OVERHEAD;
+  GET_ALLOC(FTRP(first_block_payload)) = 1; //Set allocated.
+
+  // long gap = OVERHEAD+PG_SIZE+BLOCK_HEADER;
+  GET_SIZE(HDRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
+  GET_ALLOC(HDRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
+  GET_SIZE(FTRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
+  GET_ALLOC(FTRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
+
+  // Terminators
+  GET_SIZE(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))) = 0;
+  GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))) = 1; //Set allocated.
+}
+
 /*
  * mm_init - initialize the malloc package.
  */
@@ -136,26 +165,10 @@ int mm_init(void)
   first_pg->prev = NULL;
   first_pg->size = current_avail_size;
 
-  first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
-  current_block = first_block_payload;
-
-  GET_SIZE(HDRP(first_block_payload)) = OVERHEAD;
-  GET_ALLOC(HDRP(first_block_payload)) = 1; //Set allocated.
-  GET_SIZE(FTRP(first_block_payload)) = OVERHEAD;
-  GET_ALLOC(FTRP(first_block_payload)) = 1; //Set allocated.
-
-  // long gap = OVERHEAD+PG_SIZE+BLOCK_HEADER;
-  GET_SIZE(HDRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
-  GET_ALLOC(HDRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
-  GET_SIZE(FTRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
-  GET_ALLOC(FTRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
-
-  // Terminators
-  GET_SIZE(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))) = 0;
-  GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))) = 1; //Set allocated.
-
-  printf("%s\n","initialize sucess");
-  printf("%s %ld\n", "Teminator size ", (long) GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))));
+  printf("%s\n","Initialize attempt begins.");
+  mm_init_helper();
+  printf("%s\n","Initialize sucess!");
+  // printf("%s %ld\n", "Teminator size ", (long) GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))));
   return 0;
 }
 
@@ -196,7 +209,7 @@ void* extend (size_t new_size){
   {
    current_pg = current_pg->next;
   }
-  
+
   //Hookup new page into pageList.
   current_pg->next = new_page;
   // current_pg->next->next = NULL;
@@ -221,19 +234,19 @@ void* extend (size_t new_size){
   GET_SIZE(FTRP(new_bp)) = OVERHEAD;
   GET_ALLOC(FTRP(new_bp)) = 1;
 
-  new_bp = NEXT_BLKP(new_bp);
+  //new_bp = NEXT_BLKP(new_bp);
   //create unalocated block
   GET_SIZE(HDRP(NEXT_BLKP(new_bp))) = chunk_size - GAP;
   GET_SIZE(FTRP(NEXT_BLKP(new_bp))) = chunk_size - GAP;
   GET_ALLOC(HDRP(NEXT_BLKP(new_bp))) = 0;
   GET_ALLOC(FTRP(NEXT_BLKP(new_bp))) = 0;
 
-  new_bp = NEXT_BLKP(new_bp);
+  //new_bp = NEXT_BLKP(new_bp);
   //create terminator block
-  GET_SIZE(HDRP(NEXT_BLKP(new_bp))) = 0;
-  GET_ALLOC(HDRP(NEXT_BLKP(new_bp))) = 1;
+  GET_SIZE(HDRP(NEXT_BLKP(NEXT_BLKP(new_bp)))) = 0;
+  GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(new_bp)))) = 1;
 
-  return (new_page + PG_SIZE + OVERHEAD + BLOCK_HEADER);
+  return (new_page + GAP);
 
 }
 
@@ -262,12 +275,12 @@ void *mm_malloc(size_t size)
   if(size == 0)
   return NULL;
 
-int new_size = ALIGN(size + OVERHEAD);
-void *current_pg = first_pg;
-void *new_bp;
+  size_t new_size = ALIGN(size + OVERHEAD);
+  void *current_pg = first_pg;
+  void *new_bp;
 
-// pg = current_avail == NULL ? first_pg : current_avail;
-new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+  // pg = current_avail == NULL ? first_pg : current_avail;
+  new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
 
 
 // while (GET_SIZE(HDRP(new_bp)) != 0)
@@ -280,29 +293,29 @@ new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
 //    new_bp = NEXT_BLKP(new_bp);
 //  }
 
-current_pg = first_pg;
-while(current_pg != NULL)
-{
- //if(current_pg != last_page_inserted)
+  // current_pg = first_pg;
+  while(current_pg != NULL)
   {
-   new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-   while (GET_SIZE(HDRP(new_bp)) != 0)
-   {
-    if (!GET_ALLOC(HDRP(new_bp)) && (GET_SIZE(HDRP(new_bp)) >= new_size))
+   //if(current_pg != last_page_inserted)
     {
-      set_allocated(new_bp, new_size);
-      current_avail = current_pg;
-      return new_bp;
+     new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+     while (GET_SIZE(HDRP(new_bp)) != 0)
+     {
+      if (!GET_ALLOC(HDRP(new_bp)) && (GET_SIZE(HDRP(new_bp)) >= new_size))
+      {
+        set_allocated(new_bp, new_size);
+        current_avail = current_pg;
+        return new_bp;
+      }
+      new_bp = NEXT_BLKP(new_bp);
+     }
     }
-    new_bp = NEXT_BLKP(new_bp);
-   }
+    current_pg = NEXT_PAGE(current_pg);
   }
-  current_pg = NEXT_PAGE(current_pg);
-}
 
-new_bp = extend(new_size);
-set_allocated(new_bp, new_size);
-return new_bp;
+  new_bp = extend(new_size);
+  set_allocated(new_bp, new_size);
+  return new_bp;
 }
 
 /*
@@ -348,7 +361,7 @@ void *coalesce(void *bp)
  */
 void mm_free(void *ptr)
 {
-    printf("%s\n", "mm_free reached" );
+    //printf("%s\n", "mm_free reached" );
     // printf("%s\n", "mm_free called");
     GET_ALLOC(HDRP(ptr)) = 0;
     //printf("%s\n", "mm_free called");
@@ -401,12 +414,65 @@ void mm_free(void *ptr)
     //     printf("%s\n", "mm_free called");
 }
 
+/* Check the allignment of the blcok*/
+bool check_allignment (void* bp){
+  // printf("BP is %ld\n", (unsigned long) bp);
+  if (((unsigned long) bp & (ALIGNMENT - 1)) != 0){
+    return false;
+  }
+  return true;
+}
+
 /*
  * mm_check - Check whether the heap is ok, so that mm_malloc()
  *            and proper mm_free() calls won't crash.
  */
 int mm_check()
 {
+  void* current_pg = first_pg;
+  void *current_bp;
+
+  while (current_pg != NULL){
+    if(ptr_is_mapped(current_pg, mem_pagesize()) == false ||
+      ptr_is_mapped(current_pg, PAGE_SIZE(current_pg)) == false){
+      return 0;
+    }
+
+    current_bp = current_pg + PG_SIZE + BLOCK_HEADER;
+
+    bool check_bp_size = true;
+    if (GET_SIZE(HDRP(current_bp)) != OVERHEAD){
+      check_bp_size = false;
+    }else if(GET_ALLOC(HDRP(current_bp)) != 1){
+      check_bp_size = false;
+    }else if (GET_SIZE(FTRP(current_bp)) != OVERHEAD){
+      check_bp_size = false;
+    }
+
+    if(!check_bp_size){
+      return 0;
+    }
+
+    current_bp = NEXT_BLKP(current_bp); //Move on to the next block
+    // Iterate through the blocks now. Slide pg 33.
+    while (GET_SIZE(HDRP(current_bp)) != 0){
+      // Make sure header of the next block is properly allocated.
+      if (ptr_is_mapped(current_bp - BLOCK_HEADER, BLOCK_HEADER) == false){
+        return 0;
+      }
+
+      if (!check_allignment(current_bp)){
+        return 0;
+      }
+
+      if (ptr_is_mapped(HDRP(current_bp), GET_SIZE(HDRP(current_bp))) == false){
+        return 0;
+      }
+
+
+      current_bp = NEXT_BLKP(current_bp); //Move on to the next block
+    }
+  }
   return 1;
 }
 
