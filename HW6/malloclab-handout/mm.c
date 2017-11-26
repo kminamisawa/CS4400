@@ -421,18 +421,26 @@ void *mm_malloc(size_t size)
   while(current_pg != NULL)
   {
    //if(current_pg != last_page_inserted)
+   new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+   void *best_bp = NULL;
+   while (GET_SIZE(HDRP(new_bp)) != 0)
+   {
+    if (!GET_ALLOC(HDRP(new_bp))
+      && (GET_SIZE(HDRP(new_bp)) >= new_size))
     {
-     new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-     while (GET_SIZE(HDRP(new_bp)) != 0)
-     {
-      if (!GET_ALLOC(HDRP(new_bp)) && (GET_SIZE(HDRP(new_bp)) >= new_size))
-      {
-        set_allocated(new_bp, new_size);
-        current_avail = current_pg;
-        return new_bp;
+      if(!best_bp || (GET_SIZE(HDRP(new_bp)) < GET_SIZE(HDRP(best_bp)))){
+        best_bp = new_bp;
       }
-      new_bp = NEXT_BLKP(new_bp);
-     }
+      // set_allocated(new_bp, new_size);
+      // current_avail = current_pg;
+      // return new_bp;
+    }
+    new_bp = NEXT_BLKP(new_bp);
+   }
+    if (best_bp){
+      set_allocated(best_bp, new_size);
+      current_avail = current_pg;
+      return best_bp;
     }
     current_pg = NEXT_PAGE(current_pg);
   }
