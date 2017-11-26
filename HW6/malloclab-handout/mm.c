@@ -263,7 +263,7 @@ void* extend (size_t new_size){
   next_page->next = NULL;
   next_page->prev = current_pg;
   next_page->size = chunk_size;
-  last_pg = next_page;
+  current_avail = next_page;
   // NEXT_PAGE(NEXT_PAGE(current_pg)) = NULL;
   // PREV_PAGE(NEXT_PAGE(current_pg)) = current_pg;
   // PAGE_SIZE(NEXT_PAGE(current_pg)) = chunk_size;
@@ -322,47 +322,47 @@ void *mm_malloc(size_t size)
 // if(size == 0)
 //   return NULL;
 //
-// int new_size = ALIGN(size + OVERHEAD);
-// void *pg = first_pg;
-// void *pp;
-//
-// pg = last_pg == NULL ? first_pg : last_pg;
-// pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-//
-//
-// while (GET_SIZE(HDRP(pp)) != 0)
-//  {
-//    if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
-//      {
-//  set_allocated(pp, new_size);
-//  return pp;
-//      }
-//    pp = NEXT_BLKP(pp);
-//  }
-//
-// pg = first_pg;
-// while(pg != NULL)
-// {
-//  //if(pg != last_page_inserted)
-//   {
-//    pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-//    while (GET_SIZE(HDRP(pp)) != 0)
-//    {
-//     if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
-//     {
-//       set_allocated(pp, new_size);
-//       last_pg = pg;
-//       return pp;
-//     }
-//     pp = NEXT_BLKP(pp);
-//    }
-//   }
-//   pg = NEXT_PAGE(pg);
-// }
-//
-// pp = extend(new_size);
-// set_allocated(pp, new_size);
-// return pp;
+int new_size = ALIGN(size + OVERHEAD);
+void *pg = first_pg;
+void *pp;
+
+pg = current_avail == NULL ? first_pg : current_avail;
+pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+
+
+while (GET_SIZE(HDRP(pp)) != 0)
+ {
+   if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
+     {
+ set_allocated(pp, new_size);
+ return pp;
+     }
+   pp = NEXT_BLKP(pp);
+ }
+
+pg = first_pg;
+while(pg != NULL)
+{
+ //if(pg != last_page_inserted)
+  {
+   pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+   while (GET_SIZE(HDRP(pp)) != 0)
+   {
+    if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
+    {
+      set_allocated(pp, new_size);
+      current_avail = pg;
+      return pp;
+    }
+    pp = NEXT_BLKP(pp);
+   }
+  }
+  pg = NEXT_PAGE(pg);
+}
+
+pp = extend(new_size);
+set_allocated(pp, new_size);
+return pp;
 //
 //
 //
@@ -373,16 +373,18 @@ void *mm_malloc(size_t size)
   // if(size == 0)
   // return NULL;
 
-  size_t new_size = ALIGN(size + OVERHEAD);
-  void *current_pg;
-  if(last_pg == NULL){
-    current_pg = first_pg;
-  }else{
-    current_pg = last_pg;
-  }
+  // size_t new_size = ALIGN(size + OVERHEAD);
+  // void *current_pg = first_pg;
+  // if(last_pg == NULL){
+  //   current_pg = first_pg;
+  // }else{
+  //   current_pg = last_pg;
+  // }
+  //
+  // void *new_bp;
+  // new_bp = current_pg + GAP;
 
-  void *new_bp;
-  new_bp = current_pg + GAP;
+
   //
   // void *smallest_block_so_far = NULL;
   //
@@ -418,36 +420,56 @@ void *mm_malloc(size_t size)
   // set_allocated(new_bp, new_size);
   // return new_bp;
   //
-  while(current_pg != NULL)
-  {
-   //if(current_pg != last_page_inserted)
-   new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-   void *best_bp = NULL;
-   while (GET_SIZE(HDRP(new_bp)) != 0)
-   {
-    if (!GET_ALLOC(HDRP(new_bp))
-      && (GET_SIZE(HDRP(new_bp)) >= new_size))
-    {
-      if(!best_bp || (GET_SIZE(HDRP(new_bp)) < GET_SIZE(HDRP(best_bp)))){
-        best_bp = new_bp;
-      }
-      // set_allocated(new_bp, new_size);
-      // current_avail = current_pg;
-      // return new_bp;
-    }
-    new_bp = NEXT_BLKP(new_bp);
-   }
-    if (best_bp){
-      set_allocated(best_bp, new_size);
-      current_avail = current_pg;
-      return best_bp;
-    }
-    current_pg = NEXT_PAGE(current_pg);
-  }
-
-  new_bp = extend(new_size);
-  set_allocated(new_bp, new_size);
-  return new_bp;
+  // size_t new_size = ALIGN(size + OVERHEAD);
+  // void *current_pg = first_pg;
+  // if(current_avail == NULL){
+  //   current_pg = first_pg;
+  // }else{
+  //   current_pg = current_avail;
+  // }
+  //
+  // void *new_bp;
+  // new_bp = current_pg + GAP;
+  //
+  // while (GET_SIZE(HDRP(new_bp)) != 0){
+  //   if (!GET_ALLOC(new_bp) && (GET_SIZE(HDRP(new_bp)) >= new_size)){
+  //     set_allocated(new_bp, new_size);
+  //     return new_bp;
+  //   }
+  //   new_bp = NEXT_BLKP(new_bp);
+  // }
+  //
+  // current_pg = first_pg;
+  // while(current_pg != NULL)
+  // {
+  //  //if(current_pg != last_page_inserted)
+  //  new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+  //  void *best_bp = NULL;
+  //  while (GET_SIZE(HDRP(new_bp)) != 0)
+  //  {
+  //   if (!GET_ALLOC(HDRP(new_bp))
+  //     && (GET_SIZE(HDRP(new_bp)) >= new_size))
+  //   {
+  //     // if(!best_bp || (GET_SIZE(HDRP(new_bp)) < GET_SIZE(HDRP(best_bp)))){
+  //     //   best_bp = new_bp;
+  //     // }
+  //     set_allocated(new_bp, new_size);
+  //     current_avail = current_pg;
+  //     return new_bp;
+  //   }
+  //   new_bp = NEXT_BLKP(new_bp);
+  //  }
+  //   // if (best_bp){
+  //   //   set_allocated(best_bp, new_size);
+  //   //   current_avail = current_pg;
+  //   //   return best_bp;
+  //   // }
+  //   current_pg = NEXT_PAGE(current_pg);
+  // }
+  //
+  // new_bp = extend(new_size);
+  // set_allocated(new_bp, new_size);
+  // return new_bp;
 }
 
 /*
@@ -537,7 +559,7 @@ void mm_free(void *ptr)
         NEXT_PAGE(PREV_PAGE(pg)) = NULL;
       }
 
-      last_pg = NULL;
+      current_avail = NULL;
       current_block = NULL;
 
       mem_unmap(page_start,unmap_size);
