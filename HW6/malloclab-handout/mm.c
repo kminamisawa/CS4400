@@ -10,6 +10,15 @@
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
+ * Use First-fit implementation. I tried the best-fit implementation,
+ * but, it seems that it reduces the performance in our assignemnt.
+ *
+ * Mostly, I followed the strategy from the slide. It uses both hader and footer.
+ *
+ *
+ *
+ *
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -150,42 +159,6 @@ void mm_init_helper(){
  */
 int mm_init(void)
 {
-  // extend_count = 0;
-  //
-  // size_t firstPageSize = PAGE_ALIGN(mem_pagesize() * 8);
-  // first_pg = mem_map(firstPageSize);
-  // last_pg = first_pg;
-  //
-  // //First Page Setup
-  // NEXT_PAGE(first_pg) = NULL;
-  // PREV_PAGE(first_pg) = NULL;
-  // PAGE_SIZE(first_pg) = firstPageSize;
-  //
-  // //First payload pointer
-  // current_avail = (char *)first_pg + PG_SIZE + BLOCK_HEADER;
-  // // last_block_inserted = first_pp;
-  //
-  // void* pp = current_avail;
-  // //Setup Coalescing Prologue.
-  // GET_SIZE(HDRP(pp)) = OVERHEAD;
-  // GET_ALLOC(HDRP(pp)) = 1;
-  // GET_SIZE(FTRP(pp)) = OVERHEAD;
-  // GET_ALLOC(FTRP(pp)) = 1;
-  //
-  // pp = NEXT_BLKP(pp);
-  // //setup unallocated block for new chunk.
-  // GET_SIZE(HDRP(pp)) = firstPageSize - PG_SIZE -  OVERHEAD - BLOCK_HEADER;
-  // GET_ALLOC(HDRP(pp)) = 0;
-  // GET_SIZE(FTRP(pp)) = firstPageSize - PG_SIZE -  OVERHEAD - BLOCK_HEADER;
-  // GET_ALLOC(FTRP(pp)) = 0;
-  //
-  // pp = NEXT_BLKP(pp);
-  // //setup terminator block for new chunk
-  // GET_SIZE(HDRP(pp)) = 0;
-  // GET_ALLOC(HDRP(pp)) = 1;
-  // return 0;
-///////////////////////////////////////////////////
-
   current_avail = NULL;
   current_avail_size = 0;
   current_block = NULL;
@@ -214,7 +187,6 @@ int mm_init(void)
   // printf("%s\n","Initialize attempt begins.");
   mm_init_helper();
   // printf("%s\n","Initialize sucess!");
-  // printf("%s %ld\n", "Teminator size ", (long) GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))));
   return 0;
 }
 
@@ -302,174 +274,115 @@ void* extend (size_t new_size){
  */
 void *mm_malloc(size_t size)
 {
-  // int newsize = ALIGN(size);
-  // void *p;
-  //
-  // if (current_avail_size < newsize) {
-  //   current_avail_size = PAGE_ALIGN(newsize);
-  //   current_avail = mem_map(current_avail_size);
-  //   if (current_avail == NULL)
-  //     return NULL;
-  // }
-  //
-  // p = current_avail;
-  // current_avail += newsize;
-  // current_avail_size -= newsize;
-  //
-  // printf("%s %d\n", "mm_malloc called", (int) current_avail);
-//  return p;
+  // First Fit Page 11
+  size_t new_size = ALIGN(size + OVERHEAD);
 
-// if(size == 0)
-//   return NULL;
-//
-int new_size = ALIGN(size + OVERHEAD);
-void *pg = first_pg;
-void *pp;
-
-pg = current_avail == NULL ? first_pg : current_avail;
-pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-
-
-while (GET_SIZE(HDRP(pp)) != 0)
- {
-   if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
-     {
- set_allocated(pp, new_size);
- return pp;
-     }
-   pp = NEXT_BLKP(pp);
- }
-
-pg = first_pg;
-while(pg != NULL)
-{
- //if(pg != last_page_inserted)
-  {
-   pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-   while (GET_SIZE(HDRP(pp)) != 0)
-   {
-    if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
-    {
-      set_allocated(pp, new_size);
-      current_avail = pg;
-      return pp;
-    }
-    pp = NEXT_BLKP(pp);
-   }
+  void *target_pg;
+  if (current_avail != NULL){
+    target_pg = current_avail;
+  }else{
+    target_pg = first_pg;
   }
-  pg = NEXT_PAGE(pg);
-}
 
-pp = extend(new_size);
-set_allocated(pp, new_size);
-return pp;
-//
-//
-//
+  void *target_bp = target_pg + GAP;
+  if (target_pg == current_avail){
+    while (GET_SIZE(HDRP(target_bp)) != 0)
+    {
+      if (!GET_ALLOC(HDRP(target_bp)) && (GET_SIZE(HDRP(target_bp)) >= new_size))
+       {
+         set_allocated(target_bp, new_size);
+         return target_bp;
+       }
+      target_bp = NEXT_BLKP(target_bp);
+    }
+    target_pg = first_pg;
+  }
 
+  // It the spacde is not found on current page, iterate through the page,
+  // and find an available block.
+  //target_pg = first_pg;
+  while(target_pg != NULL)
+  {
+    target_bp = target_pg + GAP;
+    while (GET_SIZE(HDRP(target_bp)) != 0)
+    {
+     if (!GET_ALLOC(HDRP(target_bp)) && (GET_SIZE(HDRP(target_bp)) >= new_size))
+     {
+       set_allocated(target_bp, new_size);
+       current_avail = target_pg;
+       return target_bp;
+     }
+     target_bp = NEXT_BLKP(target_bp);
+    }
+    target_pg = NEXT_PAGE(target_pg);
+  }
 
+  // Finally, grab new page if no available block was found.
+  target_bp = extend(new_size);
+  set_allocated(target_bp, new_size);
+  return target_bp;
 
-
-  // if(size == 0)
-  // return NULL;
-
+  /* Best-fit from page 12 on slides. Slow performance, around 40. */
   // size_t new_size = ALIGN(size + OVERHEAD);
-  // void *current_pg = first_pg;
-  // if(last_pg == NULL){
-  //   current_pg = first_pg;
+  //
+  // void *target_pg;
+  // if (current_avail != NULL){
+  //   target_pg = current_avail;
   // }else{
-  //   current_pg = last_pg;
+  //   target_pg = first_pg;
   // }
   //
-  // void *new_bp;
-  // new_bp = current_pg + GAP;
-
-
+  // void *target_bp = target_pg + GAP;
+  // void *best_bp = NULL;
   //
-  // void *smallest_block_so_far = NULL;
-  //
-  // // Iterate the block if there is a block remaining in the same page.
-  // while (GET_SIZE(HDRP(new_bp)) != 0){
-  //   // if it fits in the block and the block is un-allocated, allocate it.
-  //   if(GET_SIZE(HDRP(new_bp)) >= new_size
-  //     && !GET_ALLOC(HDRP(new_bp))){
-  //       set_allocated(new_bp, new_size);
-  //       return new_bp;
-  //   }
-  //
-  //   new_bp = NEXT_BLKP(new_bp); //Keep looking for the empty block.
-  // }
-  //
-  // current_pg = first_pg;
-  // while(current_pg != NULL){
-  //   new_bp = current_pg + GAP;
-  //   while (GET_SIZE(HDRP(new_bp)) != 0){
-  //    if (!GET_ALLOC(HDRP(new_bp))
-  //     && (GET_SIZE(HDRP(new_bp)) >= new_size))
-  //    {
-  //      set_allocated(new_bp, new_size);
-  //      last_pg = new_bp;
-  //      return new_bp;
-  //    }
-  //    new_bp = NEXT_BLKP(new_bp);
-  //   }
-  //   new_bp = NEXT_BLKP(new_bp);
-  // }
-  //
-  // new_bp = extend(new_size);
-  // set_allocated(new_bp, new_size);
-  // return new_bp;
-  //
-  // size_t new_size = ALIGN(size + OVERHEAD);
-  // void *current_pg = first_pg;
-  // if(current_avail == NULL){
-  //   current_pg = first_pg;
-  // }else{
-  //   current_pg = current_avail;
-  // }
-  //
-  // void *new_bp;
-  // new_bp = current_pg + GAP;
-  //
-  // while (GET_SIZE(HDRP(new_bp)) != 0){
-  //   if (!GET_ALLOC(new_bp) && (GET_SIZE(HDRP(new_bp)) >= new_size)){
-  //     set_allocated(new_bp, new_size);
-  //     return new_bp;
-  //   }
-  //   new_bp = NEXT_BLKP(new_bp);
-  // }
-  //
-  // current_pg = first_pg;
-  // while(current_pg != NULL)
+  // while (GET_SIZE(HDRP(target_bp)) != 0)
   // {
-  //  //if(current_pg != last_page_inserted)
-  //  new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-  //  void *best_bp = NULL;
-  //  while (GET_SIZE(HDRP(new_bp)) != 0)
-  //  {
-  //   if (!GET_ALLOC(HDRP(new_bp))
-  //     && (GET_SIZE(HDRP(new_bp)) >= new_size))
-  //   {
-  //     // if(!best_bp || (GET_SIZE(HDRP(new_bp)) < GET_SIZE(HDRP(best_bp)))){
-  //     //   best_bp = new_bp;
-  //     // }
-  //     set_allocated(new_bp, new_size);
-  //     current_avail = current_pg;
-  //     return new_bp;
-  //   }
-  //   new_bp = NEXT_BLKP(new_bp);
-  //  }
-  //   // if (best_bp){
-  //   //   set_allocated(best_bp, new_size);
-  //   //   current_avail = current_pg;
-  //   //   return best_bp;
-  //   // }
-  //   current_pg = NEXT_PAGE(current_pg);
+  //   if (!GET_ALLOC(HDRP(target_bp)) && (GET_SIZE(HDRP(target_bp)) >= new_size))
+  //    {
+  //      if(!best_bp || (GET_SIZE(HDRP(target_bp)) < GET_SIZE(HDRP(best_bp)))){
+  //        best_bp = target_bp;
+  //      }
+  //      // set_allocated(target_bp, new_size);
+  //      // return target_bp;
+  //    }
+  //   target_bp = NEXT_BLKP(target_bp);
   // }
   //
-  // new_bp = extend(new_size);
-  // set_allocated(new_bp, new_size);
-  // return new_bp;
+  // if (best_bp){
+  //   set_allocated(best_bp, new_size);
+  //   return best_bp;
+  // }
+  //
+  // target_pg = first_pg;
+  // while(target_pg != NULL)
+  // {
+  //   target_bp = target_pg + GAP;
+  //   while (GET_SIZE(HDRP(target_bp)) != 0)
+  //   {
+  //    if (!GET_ALLOC(HDRP(target_bp)) && (GET_SIZE(HDRP(target_bp)) >= new_size))
+  //    {
+  //      if(!best_bp || (GET_SIZE(HDRP(target_bp)) < GET_SIZE(HDRP(best_bp)))){
+  //        best_bp = target_bp;
+  //      }
+  //      // set_allocated(target_bp, new_size);
+  //      // current_avail = target_pg;
+  //      // return target_bp;
+  //    }
+  //    target_bp = NEXT_BLKP(target_bp);
+  //   }
+  //   target_pg = NEXT_PAGE(target_pg);
+  // }
+  //
+  // if (best_bp){
+  //   set_allocated(best_bp, new_size);
+  //   current_avail = target_pg;
+  //   return best_bp;
+  // }
+  //
+  //
+  // target_bp = extend(new_size);
+  // set_allocated(target_bp, new_size);
+  // return target_bp;
 }
 
 /*
