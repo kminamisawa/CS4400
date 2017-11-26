@@ -109,7 +109,6 @@ void* current_block;
 
 int count_extend;
 page* first_pg;
-page* last_pg;
 
 void* first_block_payload;
 
@@ -159,13 +158,11 @@ void mm_init_helper(){
  */
 int mm_init(void)
 {
+  first_pg = NULL;
   current_avail = NULL;
   current_avail_size = 0;
   current_block = NULL;
-
   extend_count = 0;
-  first_pg = NULL;
-  last_pg = NULL;
 
   // current_avail = NULL;
   // current_avail_size = 0;
@@ -191,8 +188,8 @@ int mm_init(void)
 }
 
 /*
-Adding pages. Page 85.
-*/
+ *  Adding pages. Page 85.
+ */
 void* extend (size_t new_size){
   // size_t chunk_size = CHUNK_ALLIGN(new_size);
   // void *bp = sbrk(chunk_size);
@@ -210,16 +207,12 @@ void* extend (size_t new_size){
   }else{
     pgsz_mult = extend_count >> 3;
   }
+  printf("extend count: %d\nmem_heap() %ld\n", extend_count, mem_pagesize());
   extend_count++;
-
-  //
-  // int pgsz_mult = 8 * (extend_count/8) < 1 ? 1 : (extend_count/8);
-  // extend_count += 1;
-  //printf("ec:%d\n",extend_count);
 
   int clampedSize = new_size > (pgsz_mult * mem_pagesize()) ? new_size : pgsz_mult * mem_pagesize();
   // size_t calculate_new_size = new_size + GAP;
-  size_t chunk_size = PAGE_ALIGN(clampedSize * 8); //PAGE_ALIGN(clampedSize * 4);
+  size_t chunk_size = PAGE_ALIGN(clampedSize * 8);
   void *new_page = mem_map(chunk_size);
 
   //Find pageList end.
@@ -230,7 +223,6 @@ void* extend (size_t new_size){
   }
 
   current_pg->next = new_page;
-  // current_pg->next->next = NULL;
   page* next_page = current_pg->next;
   next_page->next = NULL;
   next_page->prev = current_pg;
@@ -295,12 +287,12 @@ void *mm_malloc(size_t size)
        }
       target_bp = NEXT_BLKP(target_bp);
     }
+    // Change the page if no available block is found on current page.
     target_pg = first_pg;
   }
 
   // It the spacde is not found on current page, iterate through the page,
   // and find an available block.
-  //target_pg = first_pg;
   while(target_pg != NULL)
   {
     target_bp = target_pg + GAP;
