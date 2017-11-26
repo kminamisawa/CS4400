@@ -94,16 +94,17 @@ typedef struct
   char allocated;
 } block_footer;
 
-void *current_avail = NULL;
-int current_avail_size = 0;
-void* current_block = NULL;
+void *current_avail;
+int current_avail_size;
+void* current_block;
 
-int count_extend = 0;
-page* first_pg = NULL;
-page* last_pg = NULL;
+int count_extend;
+page* first_pg;
+page* last_pg;
 
 void* first_block_payload;
 
+/*From slide with a small modification considering the footer.*/
 void set_allocated(void *bp, size_t size)
 {
  size_t extra_size = GET_SIZE(HDRP(bp)) - size;
@@ -149,8 +150,52 @@ void mm_init_helper(){
  */
 int mm_init(void)
 {
+  // extend_count = 0;
+  //
+  // size_t firstPageSize = PAGE_ALIGN(mem_pagesize() * 8);
+  // first_pg = mem_map(firstPageSize);
+  // last_pg = first_pg;
+  //
+  // //First Page Setup
+  // NEXT_PAGE(first_pg) = NULL;
+  // PREV_PAGE(first_pg) = NULL;
+  // PAGE_SIZE(first_pg) = firstPageSize;
+  //
+  // //First payload pointer
+  // current_avail = (char *)first_pg + PG_SIZE + BLOCK_HEADER;
+  // // last_block_inserted = first_pp;
+  //
+  // void* pp = current_avail;
+  // //Setup Coalescing Prologue.
+  // GET_SIZE(HDRP(pp)) = OVERHEAD;
+  // GET_ALLOC(HDRP(pp)) = 1;
+  // GET_SIZE(FTRP(pp)) = OVERHEAD;
+  // GET_ALLOC(FTRP(pp)) = 1;
+  //
+  // pp = NEXT_BLKP(pp);
+  // //setup unallocated block for new chunk.
+  // GET_SIZE(HDRP(pp)) = firstPageSize - PG_SIZE -  OVERHEAD - BLOCK_HEADER;
+  // GET_ALLOC(HDRP(pp)) = 0;
+  // GET_SIZE(FTRP(pp)) = firstPageSize - PG_SIZE -  OVERHEAD - BLOCK_HEADER;
+  // GET_ALLOC(FTRP(pp)) = 0;
+  //
+  // pp = NEXT_BLKP(pp);
+  // //setup terminator block for new chunk
+  // GET_SIZE(HDRP(pp)) = 0;
+  // GET_ALLOC(HDRP(pp)) = 1;
+  // return 0;
+///////////////////////////////////////////////////
+
   current_avail = NULL;
   current_avail_size = 0;
+  current_block = NULL;
+
+  extend_count = 0;
+  first_pg = NULL;
+  last_pg = NULL;
+
+  // current_avail = NULL;
+  // current_avail_size = 0;
 
   current_avail_size = PAGE_ALIGN(mem_pagesize() * 8); //4096*8
 
@@ -185,6 +230,7 @@ void* extend (size_t new_size){
   //
   // GET_SIZE(HDRP((NEXT_BLKP(bp)))) = 0;
   // GET_ALLOC(HDRP(NEXT_BLKP(bp))) = 1;
+
   int pgsz_mult;
 
   if (extend_count >> 3 < 1){ //divide by 8
@@ -200,7 +246,7 @@ void* extend (size_t new_size){
   //printf("ec:%d\n",extend_count);
 
   int clampedSize = new_size > (pgsz_mult * mem_pagesize()) ? new_size : pgsz_mult * mem_pagesize();
-  size_t calculate_new_size = new_size + GAP;
+  // size_t calculate_new_size = new_size + GAP;
   size_t chunk_size = PAGE_ALIGN(clampedSize * 8); //PAGE_ALIGN(clampedSize * 4);
   void *new_page = mem_map(chunk_size);
 
@@ -211,7 +257,6 @@ void* extend (size_t new_size){
    current_pg = current_pg->next;
   }
 
-  //Hookup new page into pageList.
   current_pg->next = new_page;
   // current_pg->next->next = NULL;
   page* next_page = current_pg->next;
@@ -227,7 +272,7 @@ void* extend (size_t new_size){
 
   void *new_bp = new_page + PG_SIZE + BLOCK_HEADER;
 
-  // current_block = new_bp;
+   current_block = new_bp;
 
   //create prologue for new page
   GET_SIZE(HDRP(new_bp)) = OVERHEAD;
@@ -273,28 +318,106 @@ void *mm_malloc(size_t size)
   //
   // printf("%s %d\n", "mm_malloc called", (int) current_avail);
 //  return p;
-  if(size == 0)
-  return NULL;
+
+// if(size == 0)
+//   return NULL;
+//
+// int new_size = ALIGN(size + OVERHEAD);
+// void *pg = first_pg;
+// void *pp;
+//
+// pg = last_pg == NULL ? first_pg : last_pg;
+// pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+//
+//
+// while (GET_SIZE(HDRP(pp)) != 0)
+//  {
+//    if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
+//      {
+//  set_allocated(pp, new_size);
+//  return pp;
+//      }
+//    pp = NEXT_BLKP(pp);
+//  }
+//
+// pg = first_pg;
+// while(pg != NULL)
+// {
+//  //if(pg != last_page_inserted)
+//   {
+//    pp = pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
+//    while (GET_SIZE(HDRP(pp)) != 0)
+//    {
+//     if (!GET_ALLOC(HDRP(pp)) && (GET_SIZE(HDRP(pp)) >= new_size))
+//     {
+//       set_allocated(pp, new_size);
+//       last_pg = pg;
+//       return pp;
+//     }
+//     pp = NEXT_BLKP(pp);
+//    }
+//   }
+//   pg = NEXT_PAGE(pg);
+// }
+//
+// pp = extend(new_size);
+// set_allocated(pp, new_size);
+// return pp;
+//
+//
+//
+
+
+
+
+  // if(size == 0)
+  // return NULL;
 
   size_t new_size = ALIGN(size + OVERHEAD);
-  void *current_pg = first_pg;
+  void *current_pg;
+  if(last_pg == NULL){
+    current_pg = first_pg;
+  }else{
+    current_pg = last_pg;
+  }
+
   void *new_bp;
-
-  // pg = current_avail == NULL ? first_pg : current_avail;
-  new_bp = current_pg + PG_SIZE + OVERHEAD + BLOCK_HEADER;
-
-
-// while (GET_SIZE(HDRP(new_bp)) != 0)
-//  {
-//    if (!GET_ALLOC(HDRP(new_bp)) && (GET_SIZE(HDRP(new_bp)) >= new_size))
-//      {
-//  set_allocated(new_bp, new_size);
-//  return new_bp;
-//      }
-//    new_bp = NEXT_BLKP(new_bp);
-//  }
-
+  new_bp = current_pg + GAP;
+  //
+  // void *smallest_block_so_far = NULL;
+  //
+  // // Iterate the block if there is a block remaining in the same page.
+  // while (GET_SIZE(HDRP(new_bp)) != 0){
+  //   // if it fits in the block and the block is un-allocated, allocate it.
+  //   if(GET_SIZE(HDRP(new_bp)) >= new_size
+  //     && !GET_ALLOC(HDRP(new_bp))){
+  //       set_allocated(new_bp, new_size);
+  //       return new_bp;
+  //   }
+  //
+  //   new_bp = NEXT_BLKP(new_bp); //Keep looking for the empty block.
+  // }
+  //
   // current_pg = first_pg;
+  // while(current_pg != NULL){
+  //   new_bp = current_pg + GAP;
+  //   while (GET_SIZE(HDRP(new_bp)) != 0){
+  //    if (!GET_ALLOC(HDRP(new_bp))
+  //     && (GET_SIZE(HDRP(new_bp)) >= new_size))
+  //    {
+  //      set_allocated(new_bp, new_size);
+  //      last_pg = new_bp;
+  //      return new_bp;
+  //    }
+  //    new_bp = NEXT_BLKP(new_bp);
+  //   }
+  //   new_bp = NEXT_BLKP(new_bp);
+  // }
+  //
+  // new_bp = extend(new_size);
+  // set_allocated(new_bp, new_size);
+  // return new_bp;
+  //
   while(current_pg != NULL)
   {
    //if(current_pg != last_page_inserted)
@@ -332,6 +455,7 @@ void *coalesce(void *bp)
  if (prev_alloc && next_alloc)
    { /* Case 1 */
      /* nothing to do */
+
    }
  else if (prev_alloc && !next_alloc)
    { /* Case 2 */
@@ -362,12 +486,9 @@ void *coalesce(void *bp)
  */
 void mm_free(void *ptr)
 {
-    //printf("%s\n", "mm_free reached" );
     // printf("%s\n", "mm_free called");
     GET_ALLOC(HDRP(ptr)) = 0;
-    //printf("%s\n", "mm_free called");
     GET_ALLOC(FTRP(ptr)) = 0;
-    // // printf("%s\n", "mm_free called");
     coalesce(ptr);
 
     // printf("%s\n", "up tp cpalesce sucessed in mm_free");
@@ -456,10 +577,10 @@ bool check_allocation (void* bp){
     return false;
   }
 
-  // // Allocation must be either 0 or 1. (footer)
-  // if (GET_ALLOC(FTRP(bp)) != 0 && GET_ALLOC(FTRP(bp)) != 1){
-  //   return false;
-  // }
+  // Allocation must be either 0 or 1. (footer)
+  if (GET_ALLOC(FTRP(bp)) != 0 && GET_ALLOC(FTRP(bp)) != 1){
+    return false;
+  }
 
   // Allocation must match for footer and header
   if (GET_ALLOC(HDRP(bp)) == 0 && GET_ALLOC(FTRP(bp)) != 0){
@@ -509,69 +630,64 @@ int mm_check()
     current_bp = NEXT_BLKP(current_bp); //Move on to the next block
     // Iterate through the blocks now. Slide pg 33.
     // printf("%s\n", "mm_check second while loop.");
-    int d = 0;
     while (GET_SIZE(HDRP(current_bp)) != 0){
       // Make sure header of the next block is properly allocated.
       if (!ptr_is_mapped(current_bp - BLOCK_HEADER, BLOCK_HEADER)){
-        printf("%s\n", "Called 3");
+        // printf("%s\n", "Called 3");
         return 0;
       }
 
       // Check allignment of the block.
       if (!check_allignment(current_bp)){
-        printf("%s\n", "Called 4");
+        // printf("%s\n", "Called 4");
         return 0;
       }
 
       // Check proper amount of space is allocated for header.
       if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE(HDRP(current_bp)))){
-        printf("%s\n", "Called 8");
+        // printf("%s\n", "Called 8");
         return 0;
       }
 
       // Make sure block is not too small nor too big.
       if (!check_block_size(current_bp)){
-        printf("%s\n", "Called 10");
+        // printf("%s\n", "Called 10");
         return 0;
       }
 
       // Check the allignment of the block at footer.
       if (!check_allignment(FTRP(current_bp))){
-        printf("%s\n", "Called 5");
+        // printf("%s\n", "Called 5");
         return 0;
       }
 
       // Size of the header and footer must match in this implementation.
       if (GET_SIZE(HDRP(current_bp)) != GET_SIZE(FTRP(current_bp))){
-        printf("%s\n", "Called 6");
+        // printf("%s\n", "Called 6");
         return 0;
       }
       //printf("%s\n", "mm_check sucess so far.");
       //Make sure colleace happened.
       if (GET_ALLOC(HDRP(PREV_BLKP(current_bp))) == 0 && GET_ALLOC(HDRP(current_bp)) == 0){
-        printf("%s\n", "Called 7");
+        // printf("%s\n", "Called 7");
         return 0;
       }
-
-
 
       // Check proper amount of space is allocated for footer.
       if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE(FTRP(current_bp)))){
-        printf("%s\n", "Called 9");
+        // printf("%s\n", "Called 9");
         return 0;
       }
 
-
-
       // Make sure header and footer has the same size, which it should be.
       if (GET_SIZE(HDRP(current_bp)) != GET_SIZE(FTRP(current_bp))){
-        printf("%s\n", "Called 11");
+        // printf("%s\n", "Called 11");
         return 0;
       }
 
       // Makse sure allocation is properly set.
       if (!check_allocation(current_bp)){
-        printf("%s\n", "Called 12");
+        // printf("%s\n", "Called 12");
         return false;
       }
 
@@ -592,37 +708,6 @@ int mm_check()
  */
 int mm_can_free(void *p)
 {
-  //p is 16 byte aligned
-  // if( ((size_t)p & 15) != 0 ) { return 0; }
-  //
-  // //Header is not mapped
-  // if(!ptr_is_mapped(HDRP(p), BLOCK_HEADER)) { return 0;}
-  //
-  // // Bidirectional check.
-  // if( !ptr_is_mapped(HDRP(p), GET_SIZE(HDRP(p))) ) { return 0; }
-  // if( GET_SIZE(HDRP(p)) > (size_t)MAX_BLOCK_SIZE) { return 0; }
-  // if( GET_SIZE(HDRP(p)) < 3 * BLOCK_HEADER) { return 0; }
-  //
-  // if( !ptr_is_mapped(HDRP(p), GET_SIZE(FTRP(p))) ) { return 0; }
-  // if( GET_SIZE(FTRP(p)) > (size_t)MAX_BLOCK_SIZE ) { return 0; }
-  // if( GET_SIZE(FTRP(p)) < 3 * BLOCK_HEADER) { return 0; }
-  //
-  // //is not prologue or epilogue
-  // if(GET_SIZE(HDRP(p)) == OVERHEAD && GET_ALLOC(HDRP(p)) == 1) { return 0; }
-  // if(GET_SIZE(FTRP(p)) == OVERHEAD && GET_ALLOC(HDRP(p)) == 1) { return 0; }
-  //
-  // //is not a terminator
-  // if(GET_SIZE(HDRP(p)) == 0 && GET_ALLOC(HDRP(p)) == 1) { return 0; }
-  //
-  // // ensure that block was allocated.
-  // if( GET_ALLOC(HDRP(p)) != 1 ) { return 0; }
-  //
-  // //Double Aloc bit check
-  // if(GET_ALLOC(HDRP(p)) == 1 && GET_ALLOC(FTRP(p)) == 0) { return 0; }
-  // if(GET_ALLOC(HDRP(p)) == 0 && GET_ALLOC(FTRP(p)) == 1) { return 0; }
-  //
-  //
-  // return 1;
   // printf("%s\n", "mm_can_free called.");
   if(!check_allignment(p)){
     // printf("%s\n", "mm_can_free 1.");
