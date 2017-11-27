@@ -429,7 +429,7 @@ void unmap_helper(void* prev, void* next, size_t to_free_size, void* page_start)
     //page to remove is page linked list head
     if(pg_to_remove == first_pg)
     {
-      if(NEXT_PAGE(first_pg) == NULL && PREV_PAGE(first_pg) == NULL){
+      if(PREV_PAGE(first_pg) == NULL && NEXT_PAGE(first_pg) == NULL){
         return;
       }
 
