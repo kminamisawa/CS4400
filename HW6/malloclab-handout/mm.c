@@ -508,33 +508,33 @@ bool check_block_size (void* bp){
   return true;
 }
 
-/*
- *  Check whther the allocation is properly set.
- *  Return true if the proper size is allocated. Otherwise, return false.
-*/
-bool check_allocation (void* bp){
-  // Allocation must be either 0 or 1. (header)
-  if (GET_ALLOC(HDRP(bp)) != 0 && GET_ALLOC(HDRP(bp)) != 1){
-    return false;
-  }
-
-  // Allocation must be either 0 or 1. (footer)
-  if (GET_ALLOC_F(FTRP(bp)) != 0 && GET_ALLOC_F(FTRP(bp)) != 1){
-    return false;
-  }
-
-  // Allocation must match for footer and header
-  if (GET_ALLOC(HDRP(bp)) == 0 && GET_ALLOC_F(FTRP(bp)) != 0){
-    return false;
-  }
-
-  // Allocation must match for footer and header
-  if (GET_ALLOC(HDRP(bp)) == 1 && GET_ALLOC_F(FTRP(bp)) != 1){
-    return false;
-  }
-
-  return true;
-}
+// /*
+//  *  Check whther the allocation is properly set.
+//  *  Return true if the proper size is allocated. Otherwise, return false.
+// */
+// bool check_allocation (void* bp){
+//   // Allocation must be either 0 or 1. (header)
+//   if (GET_ALLOC(HDRP(bp)) != 0 && GET_ALLOC(HDRP(bp)) != 1){
+//     return false;
+//   }
+//
+//   // Allocation must be either 0 or 1. (footer)
+//   if (GET_ALLOC_F(FTRP(bp)) != 0 && GET_ALLOC_F(FTRP(bp)) != 1){
+//     return false;
+//   }
+//
+//   // Allocation must match for footer and header
+//   if (GET_ALLOC(HDRP(bp)) == 0 && GET_ALLOC_F(FTRP(bp)) != 0){
+//     return false;
+//   }
+//
+//   // Allocation must match for footer and header
+//   if (GET_ALLOC(HDRP(bp)) == 1 && GET_ALLOC_F(FTRP(bp)) != 1){
+//     return false;
+//   }
+//
+//   return true;
+// }
 
 /*
  * mm_check - Check whether the heap is ok, so that mm_malloc()
@@ -567,10 +567,10 @@ int mm_check()
     // printf("%s\n", "mm_check second while loop.");
     while (GET_SIZE(HDRP(current_bp)) != 0){
       // Make sure header of the next block is properly allocated.
-      if (!ptr_is_mapped(current_bp - BLOCK_HEADER, BLOCK_HEADER)){
-        // printf("%s\n", "Called 3");
-        return 0;
-      }
+      // if (!ptr_is_mapped(current_bp - BLOCK_HEADER, BLOCK_HEADER)){
+      //   // printf("%s\n", "Called 3");
+      //   return 0;
+      // }
 
       // Check allignment of the block.
       if (!check_allignment(current_bp)){
@@ -584,23 +584,23 @@ int mm_check()
         return 0;
       }
 
-      // Make sure block is not too small nor too big.
-      if (!check_block_size(current_bp)){
-        // printf("%s\n", "Called 10");
-        return 0;
-      }
+      // // Make sure block is not too small nor too big.
+      // if (!check_block_size(current_bp)){
+      //   // printf("%s\n", "Called 10");
+      //   return 0;
+      // }
 
-      // Check the allignment of the block at footer.
-      if (!check_allignment(FTRP(current_bp))){
-        // printf("%s\n", "Called 5");
-        return 0;
-      }
+      // // Check the allignment of the block at footer.
+      // if (!check_allignment(FTRP(current_bp))){
+      //   // printf("%s\n", "Called 5");
+      //   return 0;
+      // }
 
-      // Size of the header and footer must match in this implementation.
-      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
-        // printf("%s\n", "Called 6");
-        return 0;
-      }
+      // // Size of the header and footer must match in this implementation.
+      // if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
+      //   // printf("%s\n", "Called 6");
+      //   return 0;
+      // }
       //printf("%s\n", "mm_check sucess so far.");
       //Make sure colleace happened.
       if (GET_ALLOC(HDRP(PREV_BLKP(current_bp))) == 0 && GET_ALLOC(HDRP(current_bp)) == 0){
@@ -608,11 +608,11 @@ int mm_check()
         return 0;
       }
 
-      // Check proper amount of space is allocated for footer.
-      if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE_F(FTRP(current_bp)))){
-        // printf("%s\n", "Called 9");
-        return 0;
-      }
+      // // Check proper amount of space is allocated for footer.
+      // if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE_F(FTRP(current_bp)))){
+      //   // printf("%s\n", "Called 9");
+      //   return 0;
+      // }
 
       // Make sure header and footer has the same size, which it should be.
       if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
@@ -620,11 +620,11 @@ int mm_check()
         return 0;
       }
 
-      // Makse sure allocation is properly set.
-      if (!check_allocation(current_bp)){
-        // printf("%s\n", "Called 12");
-        return false;
-      }
+      // // Makse sure allocation is properly set.
+      // if (!check_allocation(current_bp)){
+      //   // printf("%s\n", "Called 12");
+      //   return false;
+      // }
 
       current_bp = NEXT_BLKP(current_bp); //Move on to the next block
     }
