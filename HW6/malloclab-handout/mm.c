@@ -56,7 +56,9 @@
 
 /* Slide page 79 */
 #define GET_SIZE(p) ((block_header *)(p))->size
+#define GET_SIZE_F(p) ((block_footer *)(p))->size
 #define GET_ALLOC(p) ((block_header *)(p))->allocated // 1 = allocated. 0 is not.
+#define GET_ALLOC_F(p) ((block_footer *)(p))->allocated
 
 /* Slide page 80 */
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))
@@ -137,16 +139,19 @@ void mm_init_helper(){
   void* first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
   current_block = first_block_payload;
 
+  // Prologue
   GET_SIZE(HDRP(first_block_payload)) = OVERHEAD;
   GET_ALLOC(HDRP(first_block_payload)) = 1; //Set allocated.
-  GET_SIZE(FTRP(first_block_payload)) = OVERHEAD;
-  GET_ALLOC(FTRP(first_block_payload)) = 1; //Set allocated.
 
-  // long gap = OVERHEAD+PG_SIZE+BLOCK_HEADER;
+  // payload
   GET_SIZE(HDRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
   GET_ALLOC(HDRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
-  GET_SIZE(FTRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
-  GET_ALLOC(FTRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
+  GET_SIZE_F(FTRP(NEXT_BLKP(first_block_payload))) = current_avail_size-GAP;
+  GET_ALLOC_F(FTRP(NEXT_BLKP(first_block_payload))) = 0; //Set un-allocated.
+
+  // Epilogue
+  GET_SIZE_F(FTRP(first_block_payload)) = OVERHEAD;
+  GET_ALLOC_F(FTRP(first_block_payload)) = 1; //Set allocated.
 
   // Terminators
   GET_SIZE(HDRP(NEXT_BLKP(NEXT_BLKP(first_block_payload)))) = 0;
@@ -236,21 +241,21 @@ void* extend (size_t new_size){
 
   current_block = new_bp;
 
-  //create prologue for new page
+  //prologue
   GET_SIZE(HDRP(new_bp)) = OVERHEAD;
   GET_ALLOC(HDRP(new_bp)) = 1;
-  GET_SIZE(FTRP(new_bp)) = OVERHEAD;
-  GET_ALLOC(FTRP(new_bp)) = 1;
 
-  //new_bp = NEXT_BLKP(new_bp);
-  //create unalocated block
+  //payload
   GET_SIZE(HDRP(NEXT_BLKP(new_bp))) = chunk_size - GAP;
-  GET_SIZE(FTRP(NEXT_BLKP(new_bp))) = chunk_size - GAP;
+  GET_SIZE_F(FTRP(NEXT_BLKP(new_bp))) = chunk_size - GAP;
   GET_ALLOC(HDRP(NEXT_BLKP(new_bp))) = 0;
-  GET_ALLOC(FTRP(NEXT_BLKP(new_bp))) = 0;
+  GET_ALLOC_F(FTRP(NEXT_BLKP(new_bp))) = 0;
 
-  //new_bp = NEXT_BLKP(new_bp);
-  //create terminator block
+  //epilogue
+  GET_SIZE_F(FTRP(new_bp)) = OVERHEAD;
+  GET_ALLOC_F(FTRP(new_bp)) = 1;
+
+  //terminator
   GET_SIZE(HDRP(NEXT_BLKP(NEXT_BLKP(new_bp)))) = 0;
   GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(new_bp)))) = 1;
 
@@ -394,12 +399,12 @@ void *coalesce(void *bp)
    { /* Case 2 */
      size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
      GET_SIZE(HDRP(bp)) = size;
-     GET_SIZE(FTRP(bp)) = size;
+     GET_SIZE_F(FTRP(bp)) = size;
    }
  else if (!prev_alloc && next_alloc)
    { /* Case 3 */
      size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-     GET_SIZE(FTRP(bp)) = size;
+     GET_SIZE_F(FTRP(bp)) = size;
      GET_SIZE(HDRP(PREV_BLKP(bp))) = size;
      bp = PREV_BLKP(bp);
    }
@@ -407,7 +412,7 @@ void *coalesce(void *bp)
    { /* Case 4 */
      size += (GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp))));
      GET_SIZE(HDRP(PREV_BLKP(bp))) = size;
-     GET_SIZE(FTRP(NEXT_BLKP(bp))) = size;
+     GET_SIZE_F(FTRP(NEXT_BLKP(bp))) = size;
      bp = PREV_BLKP(bp);
    }
 
@@ -460,7 +465,7 @@ void mm_free(void *ptr)
 {
     // printf("%s\n", "mm_free called");
     GET_ALLOC(HDRP(ptr)) = 0;
-    GET_ALLOC(FTRP(ptr)) = 0;
+    GET_ALLOC_F(FTRP(ptr)) = 0;
     coalesce(ptr);
 
     // printf("%s\n", "up tp cpalesce sucessed in mm_free");
@@ -496,8 +501,8 @@ bool check_block_size (void* bp){
   }
 
   // Make sure block is not too small nor too big.
-  if (GET_SIZE(FTRP(bp)) < 3 * BLOCK_HEADER ||
-      GET_SIZE(FTRP(bp)) > (size_t) MAX_BLOCK_SIZE){
+  if (GET_SIZE_F(FTRP(bp)) < 3 * BLOCK_HEADER ||
+      GET_SIZE_F(FTRP(bp)) > (size_t) MAX_BLOCK_SIZE){
       return false;
   }
   return true;
@@ -514,17 +519,17 @@ bool check_allocation (void* bp){
   }
 
   // Allocation must be either 0 or 1. (footer)
-  if (GET_ALLOC(FTRP(bp)) != 0 && GET_ALLOC(FTRP(bp)) != 1){
+  if (GET_ALLOC_F(FTRP(bp)) != 0 && GET_ALLOC_F(FTRP(bp)) != 1){
     return false;
   }
 
   // Allocation must match for footer and header
-  if (GET_ALLOC(HDRP(bp)) == 0 && GET_ALLOC(FTRP(bp)) != 0){
+  if (GET_ALLOC(HDRP(bp)) == 0 && GET_ALLOC_F(FTRP(bp)) != 0){
     return false;
   }
 
   // Allocation must match for footer and header
-  if (GET_ALLOC(HDRP(bp)) == 1 && GET_ALLOC(FTRP(bp)) != 1){
+  if (GET_ALLOC(HDRP(bp)) == 1 && GET_ALLOC_F(FTRP(bp)) != 1){
     return false;
   }
 
@@ -554,7 +559,7 @@ int mm_check()
       check_bp_size = false;
     }else if(GET_ALLOC(HDRP(current_bp)) != 1){
       check_bp_size = false;
-    }else if (GET_SIZE(FTRP(current_bp)) != OVERHEAD){
+    }else if (GET_SIZE_F(FTRP(current_bp)) != OVERHEAD){
       check_bp_size = false;
     }
 
@@ -598,7 +603,7 @@ int mm_check()
       }
 
       // Size of the header and footer must match in this implementation.
-      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE(FTRP(current_bp))){
+      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
         // printf("%s\n", "Called 6");
         return 0;
       }
@@ -610,13 +615,13 @@ int mm_check()
       }
 
       // Check proper amount of space is allocated for footer.
-      if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE(FTRP(current_bp)))){
+      if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE_F(FTRP(current_bp)))){
         // printf("%s\n", "Called 9");
         return 0;
       }
 
       // Make sure header and footer has the same size, which it should be.
-      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE(FTRP(current_bp))){
+      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
         // printf("%s\n", "Called 11");
         return 0;
       }
