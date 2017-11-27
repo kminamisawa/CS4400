@@ -68,9 +68,7 @@
 #define PUT(p, value)  (*(int *)(p) = (value))
 #define PACK(size, alloc)  ((size) | (alloc))
 
-#define NEXT_PAGE(pg) (((page *)pg)->next)
-#define PREV_PAGE(pg) (((page *)pg)->prev)
-#define PAGE_SIZE(pg) (((page *)pg)->size)
+#define MAX(x ,y)  ((x) > (y) ? (x) : (y))
 
 typedef int bool;
 #define true 1
@@ -205,40 +203,34 @@ void* extend (size_t new_size){
   // GET_SIZE(HDRP((NEXT_BLKP(bp)))) = 0;
   // GET_ALLOC(HDRP(NEXT_BLKP(bp))) = 1;
 
-  int pgsz_mult = 1;
-  int extend_count_eighth = extend_count >> 3;
-  if (extend_count_eighth >= 1){ //divide by 8
-    pgsz_mult = extend_count_eighth;
+  int pg_size_by_8 = 1;
+  int extend_count_by_8 = extend_count >> 3; //divide by 8
+  if (extend_count_by_8 > 1){
+    pg_size_by_8 = extend_count_by_8;
   }
-  //printf("extend count: %d\nmem_heap() %ld\n", extend_count, mem_pagesize());
   extend_count++;
 
-  int clampedSize = new_size > (pgsz_mult * mem_pagesize()) ? new_size : pgsz_mult * mem_pagesize();
-  // size_t calculate_new_size = new_size + GAP;
-  size_t chunk_size = PAGE_ALIGN(clampedSize * 8);
+  // pg. 58. Not exaxtly sure if this is right.
+  size_t need_size = MAX(new_size, pg_size_by_8 * mem_pagesize());
+  size_t chunk_size = PAGE_ALIGN(need_size * 8);
+
   void *new_page = mem_map(chunk_size);
 
-  //Find pageList end.
   page *current_pg = first_pg;
-  while(current_pg->next != NULL)
-  {
+  while(current_pg->next != NULL){
    current_pg = (page*) current_pg->next;
   }
 
   current_pg->next = new_page;
+
   page* next_page = (page*) current_pg->next;
   next_page->next = NULL;
-  next_page->prev = (struct page*)current_pg;
+  next_page->prev = (struct page*) current_pg;
   next_page->size = chunk_size;
-  current_avail = next_page;
-  // NEXT_PAGE(NEXT_PAGE(current_pg)) = NULL;
-  // PREV_PAGE(NEXT_PAGE(current_pg)) = current_pg;
-  // PAGE_SIZE(NEXT_PAGE(current_pg)) = chunk_size;
 
-  // last_current_pg = NEXT_PAGE(current_pg);
+  current_avail = next_page;
 
   void *new_bp = new_page + PG_SIZE + BLOCK_HEADER;
-
   current_block = new_bp;
 
   //prologue
@@ -308,7 +300,9 @@ void *mm_malloc(size_t size)
      }
      target_bp = NEXT_BLKP(target_bp);
     }
-    target_pg = NEXT_PAGE(target_pg);
+    page* next_page = target_pg;
+    next_page = (page*) next_page->next;
+    target_pg = next_page;
   }
 
   // Finally, grab new page if no available block was found.
@@ -425,12 +419,13 @@ void unmap_helper(page* freeing_page, size_t to_free_size, void* prev, void* nex
   if(GET_SIZE(prev) == OVERHEAD && GET_SIZE(next) == 0)
   {
     if (first_pg == freeing_page){
-      if(PREV_PAGE(first_pg) == NULL && NEXT_PAGE(first_pg) == NULL){
+      if(first_pg->prev == NULL && first_pg->next == NULL){
         return;
       }
 
-      PREV_PAGE(NEXT_PAGE(first_pg)) = NULL;
-      current_avail = NEXT_PAGE(first_pg);
+      page* next_page = (page*) first_pg->next;
+      next_page->prev = NULL;
+      current_avail = next_page;
       first_pg = current_avail;
     }else{
       page *pg_to_remove = (page*) first_pg->next;
@@ -439,14 +434,17 @@ void unmap_helper(page* freeing_page, size_t to_free_size, void* prev, void* nex
         pg_to_remove = (page*) pg_to_remove->next;
       }
 
-      if(PREV_PAGE(pg_to_remove) != NULL && NEXT_PAGE(pg_to_remove) != NULL)
+      if(pg_to_remove->prev != NULL && pg_to_remove->next != NULL)
       {
-        PREV_PAGE(NEXT_PAGE(pg_to_remove)) = PREV_PAGE(pg_to_remove);
-        NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NEXT_PAGE(pg_to_remove);
+        page* next_page = (page*) pg_to_remove->next;
+        page* prev_page = (page*) pg_to_remove->prev;
+        next_page->prev = pg_to_remove->prev;
+        prev_page->next = pg_to_remove->next;
       }
       else
       {
-        NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NULL;
+        page* prev_page = (page*) pg_to_remove->prev;
+        prev_page->next = NULL;
       }
     }
 
@@ -478,7 +476,8 @@ void mm_free(void *ptr)
     // printf("%s\n", "mm_free called");
 }
 
-/* Check the allignment of the blcok
+/*
+ * Check the allignment of the blcok
  * Return true if the allignment is proper. False otherwise.
 */
 bool check_allignment (void* bp){
@@ -494,17 +493,18 @@ bool check_allignment (void* bp){
  *  Return true if the proper size is allocated. Otherwise, return false.
 */
 bool check_block_size (void* bp){
-  // Make sure block is not too small nor too big.
+  // Make sure block is not too small
   if (GET_SIZE(HDRP(bp)) < 3 * BLOCK_HEADER ||
-      GET_SIZE(HDRP(bp)) > (size_t) MAX_BLOCK_SIZE){
+      GET_SIZE_F(FTRP(bp)) < 3 * BLOCK_HEADER){
       return false;
   }
 
-  // Make sure block is not too small nor too big.
-  if (GET_SIZE_F(FTRP(bp)) < 3 * BLOCK_HEADER ||
+  // Make sure block is not too too big.
+  if (GET_SIZE(HDRP(bp)) > (size_t) MAX_BLOCK_SIZE ||
       GET_SIZE_F(FTRP(bp)) > (size_t) MAX_BLOCK_SIZE){
       return false;
   }
+
   return true;
 }
 
@@ -547,24 +547,18 @@ int mm_check()
   void *current_bp;
   while (current_pg != NULL){
     if(ptr_is_mapped(current_pg, mem_pagesize()) == false ||
-      ptr_is_mapped(current_pg, PAGE_SIZE(current_pg)) == false){
+      ptr_is_mapped(current_pg, ((page *)current_pg)->size) == false){
       // printf("%s\n", "Called 1");
       return 0;
     }
 
     current_bp = current_pg + PG_SIZE + BLOCK_HEADER;
 
-    bool check_bp_size = true;
     if (GET_SIZE(HDRP(current_bp)) != OVERHEAD){
-      check_bp_size = false;
+      return 0;
     }else if(GET_ALLOC(HDRP(current_bp)) != 1){
-      check_bp_size = false;
+      return 0;
     }else if (GET_SIZE_F(FTRP(current_bp)) != OVERHEAD){
-      check_bp_size = false;
-    }
-
-    if(!check_bp_size){
-      // printf("%s\n", "Called 2");
       return 0;
     }
 
