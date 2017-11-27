@@ -109,7 +109,6 @@ typedef struct list_node {
 
 void *current_avail;
 int current_avail_size;
-void* current_block;
 
 int count_extend;
 int free_count;
@@ -185,8 +184,7 @@ void set_allocated(void *bp, size_t size)
 
 void mm_init_helper(){
   void* first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
-  current_block = first_block_payload;
-  add_to_free_list(current_block + GET_SIZE(HDRP(current_block)));
+  add_to_free_list(first_block_payload + GET_SIZE(HDRP(first_block_payload)));
 
   // Prologue
   GET_SIZE(HDRP(first_block_payload)) = OVERHEAD;
@@ -220,7 +218,6 @@ int mm_init(void)
   first_pg = NULL;
   current_avail = NULL;
   current_avail_size = 0;
-  current_block = NULL;
   extend_count = 0;
   free_bp_head = NULL;
 
@@ -245,8 +242,6 @@ int mm_init(void)
 }
 
 void extend_helper(void* new_bp, size_t chunk_size){
-  current_block = new_bp;
-
   //prologue
   GET_SIZE(HDRP(new_bp)) = OVERHEAD;
   GET_ALLOC(HDRP(new_bp)) = 1;
@@ -279,15 +274,13 @@ void* extend (size_t new_size){
   // GET_SIZE(HDRP((NEXT_BLKP(bp)))) = 0;
   // GET_ALLOC(HDRP(NEXT_BLKP(bp))) = 1;
 
-  int pg_size_by_8 = 1;
-  int extend_count_by_8 = extend_count >> 3; //divide by 8
-  if (extend_count_by_8 > 1){
-    pg_size_by_8 = extend_count_by_8;
+  int extend_count_by_8 = (extend_count >> 3); //divide by 8
+  if (extend_count_by_8 < 1){
+    extend_count_by_8 = 1;
   }
-  extend_count++;
 
   // pg. 58. Not exaxtly sure if this is right.
-  size_t need_size = MAX(new_size, pg_size_by_8 * mem_pagesize());
+  size_t need_size = MAX(new_size, extend_count_by_8 * mem_pagesize());
   size_t chunk_size = PAGE_ALIGN(need_size * 8);
 
   void *new_page = mem_map(chunk_size);
@@ -307,9 +300,8 @@ void* extend (size_t new_size){
   current_avail = next_page;
 
   void *new_bp = new_page + PG_SIZE + BLOCK_HEADER;
-  current_block = new_bp;
   extend_helper(new_bp, chunk_size);
-
+  extend_count++;
   return (new_page + GAP);
 }
 
@@ -517,7 +509,6 @@ void unmap_helper(page* freeing_page, size_t to_free_size, void* prev, void* nex
     }
 
     current_avail = NULL;
-    current_block = NULL;
 
     mem_unmap(freeing_page, to_free_size);
   }
@@ -576,6 +567,32 @@ bool check_block_size (void* bp){
   return true;
 }
 
+bool mm_check_helper(void* current_bp){
+  if (!check_allignment(current_bp)){
+    // printf("%s\n", "Called 1");
+    return false;
+  }
+
+  // Check proper amount of space is allocated for header.
+  if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE(HDRP(current_bp)))){
+    // printf("%s\n", "Called 2");
+    return false;
+  }
+
+  //Make sure colleace happened.
+  if (GET_ALLOC(HDRP(PREV_BLKP(current_bp))) == 0 && GET_ALLOC(HDRP(current_bp)) == 0){
+    // printf("%s\n", "Called 4");
+    return false;
+  }
+
+  // Make sure header and footer has the same size, which it should be.
+  if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
+    // printf("%s\n", "Called 3");
+    return false;
+  }
+  return true;
+}
+
 /*
  * mm_check - Check whether the heap is ok, so that mm_malloc()
  *            and proper mm_free() calls won't crash.
@@ -609,27 +626,8 @@ int mm_check()
     // Iterate through the blocks now. Slide pg 33.
     // printf("%s\n", "mm_check second while loop.");
     while (GET_SIZE(HDRP(current_bp)) != 0){
-      // Check allignment of the block.
-      if (!check_allignment(current_bp)){
-        // printf("%s\n", "Called 4");
-        return 0;
-      }
-
-      // Check proper amount of space is allocated for header.
-      if (!ptr_is_mapped(HDRP(current_bp), GET_SIZE(HDRP(current_bp)))){
-        // printf("%s\n", "Called 8");
-        return 0;
-      }
-
-      //Make sure colleace happened.
-      if (GET_ALLOC(HDRP(PREV_BLKP(current_bp))) == 0 && GET_ALLOC(HDRP(current_bp)) == 0){
-        // printf("%s\n", "Called 7");
-        return 0;
-      }
-
-      // Make sure header and footer has the same size, which it should be.
-      if (GET_SIZE(HDRP(current_bp)) != GET_SIZE_F(FTRP(current_bp))){
-        // printf("%s\n", "Called 11");
+      int result = mm_check_helper(current_bp);
+      if (!result){
         return 0;
       }
 
