@@ -414,21 +414,12 @@ void *coalesce(void *bp)
  return bp;
 }
 
-void unmap_helper(void* prev, void* next, size_t to_free_size, void* page_start){
+void unmap_helper(page* freeing_page, size_t to_free_size, void* prev, void* next){
   // printf("%s\n", "up tp page_start in mm_free");
   //Terminator block is next. Prologue block is prev.
   if(GET_SIZE(prev) == OVERHEAD && GET_SIZE(next) == 0)
   {
-    page *pg_to_remove = first_pg;
-
-    while(pg_to_remove != page_start)
-    {
-      pg_to_remove = (page*) pg_to_remove->next;
-    }
-
-    //page to remove is page linked list head
-    if(pg_to_remove == first_pg)
-    {
+    if (first_pg == freeing_page){
       if(PREV_PAGE(first_pg) == NULL && NEXT_PAGE(first_pg) == NULL){
         return;
       }
@@ -436,21 +427,28 @@ void unmap_helper(void* prev, void* next, size_t to_free_size, void* page_start)
       PREV_PAGE(NEXT_PAGE(first_pg)) = NULL;
       current_avail = NEXT_PAGE(first_pg);
       first_pg = current_avail;
-    }
-    else if(NEXT_PAGE(pg_to_remove) != NULL && PREV_PAGE(pg_to_remove) != NULL)
-    {
-      PREV_PAGE(NEXT_PAGE(pg_to_remove)) = PREV_PAGE(pg_to_remove);
-      NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NEXT_PAGE(pg_to_remove);
-    }
-    else
-    {
-      NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NULL;
+    }else{
+      page *pg_to_remove = (page*) first_pg->next;
+      while(pg_to_remove != freeing_page)
+      {
+        pg_to_remove = (page*) pg_to_remove->next;
+      }
+
+      if(PREV_PAGE(pg_to_remove) != NULL && NEXT_PAGE(pg_to_remove) != NULL)
+      {
+        PREV_PAGE(NEXT_PAGE(pg_to_remove)) = PREV_PAGE(pg_to_remove);
+        NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NEXT_PAGE(pg_to_remove);
+      }
+      else
+      {
+        NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NULL;
+      }
     }
 
     current_avail = NULL;
     current_block = NULL;
 
-    mem_unmap(page_start, to_free_size);
+    mem_unmap(freeing_page, to_free_size);
   }
 }
 
@@ -469,9 +467,9 @@ void mm_free(void *ptr)
     void *prev = HDRP(PREV_BLKP(ptr));
     void *next = HDRP(NEXT_BLKP(ptr));
     size_t to_free_size = PAGE_ALIGN(GET_SIZE(HDRP(ptr)) + GAP);
-    void * page_start = ptr - GAP; // HDRP(ptr)
+    void * freeing_page = ptr - GAP; // HDRP(ptr)
 
-    unmap_helper(prev, next, to_free_size, page_start);
+    unmap_helper(freeing_page, to_free_size, prev, next);
     // printf("%s\n", "mm_free called");
 }
 
