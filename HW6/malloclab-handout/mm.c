@@ -110,7 +110,7 @@ void* current_block;
 int count_extend;
 page* first_pg;
 
-void* first_block_payload;
+// void* first_block_payload;
 
 /*From slide with a small modification considering the footer.*/
 void set_allocated(void *bp, size_t size)
@@ -134,7 +134,7 @@ void set_allocated(void *bp, size_t size)
 }
 
 void mm_init_helper(){
-  first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
+  void* first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
   current_block = first_block_payload;
 
   GET_SIZE(HDRP(first_block_payload)) = OVERHEAD;
@@ -200,12 +200,10 @@ void* extend (size_t new_size){
   // GET_SIZE(HDRP((NEXT_BLKP(bp)))) = 0;
   // GET_ALLOC(HDRP(NEXT_BLKP(bp))) = 1;
 
-  int pgsz_mult;
-
-  if (extend_count >> 3 < 1){ //divide by 8
-    pgsz_mult = 1;
-  }else{
-    pgsz_mult = extend_count >> 3;
+  int pgsz_mult = 1;
+  int extend_count_eighth = extend_count >> 3;
+  if (extend_count_eighth >= 1){ //divide by 8
+    pgsz_mult = extend_count_eighth;
   }
   //printf("extend count: %d\nmem_heap() %ld\n", extend_count, mem_pagesize());
   extend_count++;
@@ -236,7 +234,7 @@ void* extend (size_t new_size){
 
   void *new_bp = new_page + PG_SIZE + BLOCK_HEADER;
 
-   current_block = new_bp;
+  current_block = new_bp;
 
   //create prologue for new page
   GET_SIZE(HDRP(new_bp)) = OVERHEAD;
@@ -257,7 +255,6 @@ void* extend (size_t new_size){
   GET_ALLOC(HDRP(NEXT_BLKP(NEXT_BLKP(new_bp)))) = 1;
 
   return (new_page + GAP);
-
 }
 
 /*
@@ -291,7 +288,7 @@ void *mm_malloc(size_t size)
     target_pg = first_pg;
   }
 
-  // It the spacde is not found on current page, iterate through the page,
+  // It the space is not found on current page, iterate through the page,
   // and find an available block.
   while(target_pg != NULL)
   {
@@ -314,6 +311,7 @@ void *mm_malloc(size_t size)
   set_allocated(target_bp, new_size);
   return target_bp;
 
+  ///////////////////////  BEST FIT BEGINS HERE ////////////////////////////////
   /* Best-fit from page 12 on slides. Slow performance, around 40. */
   // size_t new_size = ALIGN(size + OVERHEAD);
   //
@@ -416,6 +414,47 @@ void *coalesce(void *bp)
  return bp;
 }
 
+void unmap_helper(void* prev, void* next, size_t to_free_size, void* page_start){
+  // printf("%s\n", "up tp page_start in mm_free");
+  //Terminator block is next. Prologue block is prev.
+  if(GET_SIZE(prev) == OVERHEAD && GET_SIZE(next) == 0)
+  {
+    page *pg_to_remove = first_pg;
+
+    while(pg_to_remove != page_start)
+    {
+      pg_to_remove = (page*) pg_to_remove->next;
+    }
+
+    //page to remove is page linked list head
+    if(pg_to_remove == first_pg)
+    {
+      if(NEXT_PAGE(first_pg) == NULL && PREV_PAGE(first_pg) == NULL){
+        return;
+      }
+
+      PREV_PAGE(NEXT_PAGE(first_pg)) = NULL;
+      current_avail = NEXT_PAGE(first_pg);
+      first_pg = current_avail;
+    }
+    else if(NEXT_PAGE(pg_to_remove) != NULL && PREV_PAGE(pg_to_remove) != NULL)
+    {
+      PREV_PAGE(NEXT_PAGE(pg_to_remove)) = PREV_PAGE(pg_to_remove);
+      NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NEXT_PAGE(pg_to_remove);
+    }
+    else
+    {
+      NEXT_PAGE(PREV_PAGE(pg_to_remove)) = NULL;
+    }
+
+    current_avail = NULL;
+    current_block = NULL;
+
+    mem_unmap(page_start, to_free_size);
+  }
+}
+
+
 /*
  * mm_free - Freeing a block does nothing.
  */
@@ -429,47 +468,11 @@ void mm_free(void *ptr)
     // printf("%s\n", "up tp cpalesce sucessed in mm_free");
     void *prev = HDRP(PREV_BLKP(ptr));
     void *next = HDRP(NEXT_BLKP(ptr));
+    size_t to_free_size = PAGE_ALIGN(GET_SIZE(HDRP(ptr)) + GAP);
+    void * page_start = ptr - GAP; // HDRP(ptr)
 
-    size_t unmap_size = PAGE_ALIGN(GET_SIZE(HDRP(ptr)) + OVERHEAD + BLOCK_HEADER + PG_SIZE);
-    void * page_start = ptr - OVERHEAD - BLOCK_HEADER - PG_SIZE;
-    // printf("%s\n", "up tp page_start in mm_free");
-    //Terminator block is next. Prologue block is prev.
-    if(GET_SIZE(next) == 0 && GET_SIZE(prev) == OVERHEAD)
-    {
-      //Un hook page from page linked list.
-      void *pg = first_pg;
-      // printf("%s\n", "up tp pg=first page in mm_free");
-      while(pg != page_start)
-      {
-        pg = NEXT_PAGE(pg);
-      }
-      //page to remove is page linked list head
-      if(pg == first_pg)
-      {
-        //About to remove first page.
-        // printf("%s\n", "up tp pg == first_pg in mm_free");
-        if(NEXT_PAGE(first_pg) == NULL && PREV_PAGE(first_pg) == NULL)
-          return;
-
-        PREV_PAGE(NEXT_PAGE(first_pg)) = NULL;
-        first_pg = current_avail =  NEXT_PAGE(first_pg);
-      }
-      else if(NEXT_PAGE(pg) != NULL && PREV_PAGE(pg) != NULL)
-      {
-        PREV_PAGE(NEXT_PAGE(pg)) = PREV_PAGE(pg);
-        NEXT_PAGE(PREV_PAGE(pg)) = NEXT_PAGE(pg);
-      }
-      else
-      {
-        NEXT_PAGE(PREV_PAGE(pg)) = NULL;
-      }
-
-      current_avail = NULL;
-      current_block = NULL;
-
-      mem_unmap(page_start,unmap_size);
-    }
-        // printf("%s\n", "mm_free called");
+    unmap_helper(prev, next, to_free_size, page_start);
+    // printf("%s\n", "mm_free called");
 }
 
 /* Check the allignment of the blcok
@@ -477,7 +480,7 @@ void mm_free(void *ptr)
 */
 bool check_allignment (void* bp){
   // printf("BP is %ld\n", (unsigned long) bp);
-  if (((unsigned long) bp & (ALIGNMENT - 1)) != 0){
+    if (((unsigned long) bp & (ALIGNMENT - 1)) != 0){
     return false;
   }
   return true;
@@ -644,30 +647,31 @@ int mm_check()
 int mm_can_free(void *p)
 {
   // printf("%s\n", "mm_can_free called.");
-  if(!check_allignment(p)){
-    // printf("%s\n", "mm_can_free 1.");
-    return 0;
-  }
+  // if(!check_allignment(p)){
+  //   // printf("%s\n", "mm_can_free 1.");
+  //   return 0;
+  // }
 
   if(!ptr_is_mapped(HDRP(p), BLOCK_HEADER)){
     // printf("%s\n", "mm_can_free 2.");
     return 0;
   }
 
+  //Added for -r 1000 option
   if(!ptr_is_mapped(HDRP(p), GET_SIZE(HDRP(p)))){
     // printf("%s\n", "mm_can_free 3.");
     return 0;
   }
 
-  if(!ptr_is_mapped(HDRP(p), GET_SIZE(FTRP(p)))){
-    // printf("%s\n", "mm_can_free 4.");
-    return 0;
-  }
+  // if(!ptr_is_mapped(HDRP(p), GET_SIZE(FTRP(p)))){
+  //   // printf("%s\n", "mm_can_free 4.");
+  //   return 0;
+  // }
 
-  if(!check_block_size(p)){
-    // printf("%s\n", "mm_can_free 5.");
-    return 0;
-  }
+  // if(!check_block_size(p)){
+  //   // printf("%s\n", "mm_can_free 5.");
+  //   return 0;
+  // }
 
   // Make sure this is a currently allocated block.
   if(GET_ALLOC(HDRP(p)) != 1){
@@ -675,35 +679,35 @@ int mm_can_free(void *p)
     return 0;
   }
 
-  // Make sure the block is not prologue
-  if(GET_SIZE(HDRP(p)) == OVERHEAD && GET_ALLOC(HDRP(p)) == 1){
-    // printf("%s\n", "mm_can_free 7.");
-    return 0;
-  }
-
-  // Make sure the block is not epilogue
-  if(GET_SIZE(FTRP(p)) == OVERHEAD && GET_ALLOC(FTRP(p)) == 1){
-    // printf("%s\n", "mm_can_free 8.");
-    return 0;
-  }
-
-  // Make sure the block is not a terminator
-  if(GET_SIZE(HDRP(p)) == 0 && GET_ALLOC(HDRP(p)) == 1){
-    // printf("%s\n", "mm_can_free 9.");
-    return 0;
-  }
-
-  // Allocation must match for footer and header
-  if (GET_ALLOC(HDRP(p)) == 0 && GET_ALLOC(FTRP(p)) != 0){
-    // printf("%s\n", "mm_can_free 10.");
-    return false;
-  }
-
-  // Allocation must match for footer and header
-  if (GET_ALLOC(HDRP(p)) == 1 && GET_ALLOC(FTRP(p)) != 1){
-    // printf("%s\n", "mm_can_free 11.");
-    return false;
-  }
+  // // Make sure the block is not prologue
+  // if(GET_SIZE(HDRP(p)) == OVERHEAD && GET_ALLOC(HDRP(p)) == 1){
+  //   // printf("%s\n", "mm_can_free 7.");
+  //   return 0;
+  // }
+  //
+  // // Make sure the block is not epilogue
+  // if(GET_SIZE(FTRP(p)) == OVERHEAD && GET_ALLOC(FTRP(p)) == 1){
+  //   // printf("%s\n", "mm_can_free 8.");
+  //   return 0;
+  // }
+  //
+  // // Make sure the block is not a terminator
+  // if(GET_SIZE(HDRP(p)) == 0 && GET_ALLOC(HDRP(p)) == 1){
+  //   // printf("%s\n", "mm_can_free 9.");
+  //   return 0;
+  // }
+  //
+  // // Allocation must match for footer and header
+  // if (GET_ALLOC(HDRP(p)) == 0 && GET_ALLOC(FTRP(p)) != 0){
+  //   // printf("%s\n", "mm_can_free 10.");
+  //   return false;
+  // }
+  //
+  // // Allocation must match for footer and header
+  // if (GET_ALLOC(HDRP(p)) == 1 && GET_ALLOC(FTRP(p)) != 1){
+  //   // printf("%s\n", "mm_can_free 11.");
+  //   return false;
+  // }
 
   // printf("%s\n", "mm_can_free sucess.");
   return 1;
