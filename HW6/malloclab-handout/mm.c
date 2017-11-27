@@ -103,12 +103,55 @@ typedef struct
   char allocated;
 } block_footer;
 
+typedef struct list_node {
+ struct list_node *prev;
+ struct list_node *next;
+} list_node;
+
 void *current_avail;
 int current_avail_size;
 void* current_block;
 
 int count_extend;
 page* first_pg;
+
+
+list_node* free_bp_head;
+/* Modified from http://www.geeksforgeeks.org/delete-a-linked-list-node-at-a-given-position
+ * to create a linked list.
+ */
+void add_to_free_list(list_node* bp){
+  bp->next = free_bp_head;
+  bp->prev = NULL;
+  if (free_bp_head != NULL){
+    free_bp_head->prev = bp;
+  }
+  free_bp_head = bp;
+}
+
+void delete_from_free_list(list_node* bp){
+  int position = 0;
+
+  while (free_bp_head->next != bp){
+    position++;
+  }
+  list_node* temp = free_bp_head;
+  if (position == 0){
+    free_bp_head = temp->next;
+    return;
+  }
+  int i;
+  for (i = 0; (temp != NULL && i < position-1); i++){
+    temp = temp->next;
+  }
+
+  if (temp == NULL || temp->next == NULL){
+    return;
+  }
+
+  list_node* next = temp->next->next;
+  temp->next = next;
+}
 
 // void* first_block_payload;
 
@@ -136,6 +179,7 @@ void set_allocated(void *bp, size_t size)
 void mm_init_helper(){
   void* first_block_payload = (char*) first_pg + PG_SIZE + BLOCK_HEADER;
   current_block = first_block_payload;
+  add_to_free_list(current_block);
 
   // Prologue
   GET_SIZE(HDRP(first_block_payload)) = OVERHEAD;
@@ -166,6 +210,7 @@ int mm_init(void)
   current_avail_size = 0;
   current_block = NULL;
   extend_count = 0;
+  free_bp_head = NULL;
 
   // current_avail = NULL;
   // current_avail_size = 0;
@@ -260,6 +305,7 @@ void* extend (size_t new_size){
  */
 void *mm_malloc(size_t size)
 {
+  // size_t need_size = MAX(size, sizeof(free_bp_head));
   // First Fit Page 11
   size_t new_size = ALIGN(size + OVERHEAD);
 
@@ -387,7 +433,7 @@ void *coalesce(void *bp)
  if (prev_alloc && next_alloc)
    { /* Case 1 */
      /* nothing to do */
-
+     // add_to_free_list(bp);
    }
  else if (prev_alloc && !next_alloc)
    { /* Case 2 */
