@@ -15,7 +15,7 @@
  *
  * Mostly, I followed the strategy from the slide. It uses both hader and footer.
  * I have tried to implement in explicit free list, but I had trouble solving
- * seagfault error in colleace, so it used the implicit free list.
+ * seagfault error in colleace, so I used the implicit free list.
  *
  */
 #include <stdio.h>
@@ -241,6 +241,9 @@ int mm_init(void)
   return 0;
 }
 
+/*
+ *  Helper method for adding pages. Page 85.
+ */
 void extend_helper(void* new_bp, size_t chunk_size){
   //prologue
   GET_SIZE(HDRP(new_bp)) = OVERHEAD;
@@ -274,12 +277,13 @@ void* extend (size_t new_size){
   // GET_SIZE(HDRP((NEXT_BLKP(bp)))) = 0;
   // GET_ALLOC(HDRP(NEXT_BLKP(bp))) = 1;
 
+  // dividing by 8 seems to give the best performance.
   int extend_count_by_8 = (extend_count >> 3); //divide by 8
   if (extend_count_by_8 < 1){
     extend_count_by_8 = 1;
   }
 
-  // pg. 58. Not exaxtly sure if this is right.
+  // pg. 58. Trying to reduce the call to mm_map.
   size_t need_size = MAX(new_size, extend_count_by_8 * mem_pagesize());
   size_t chunk_size = PAGE_ALIGN(need_size * 8);
 
@@ -290,13 +294,14 @@ void* extend (size_t new_size){
    current_pg = (page*) current_pg->next;
   }
 
+  // Link the new page.
   current_pg->next = new_page;
-
   page* next_page = (page*) current_pg->next;
   next_page->next = NULL;
   next_page->prev = (struct page*) current_pg;
   next_page->size = chunk_size;
 
+  // Update the most recently added page.
   current_avail = next_page;
 
   void *new_bp = new_page + PG_SIZE + BLOCK_HEADER;
