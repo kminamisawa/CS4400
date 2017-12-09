@@ -32,8 +32,7 @@ static void add_friend_to_dict(char* user, char** adding_friends);
 static void remove_friend_from_dict(dictionary_t* friend_of_users, char* user, char** removing_friends);
 static void add_friend_to_dict_introduce(char* user, char** adding_friends);
 
-
-static char* server_portno;
+// static char* server_portno;
 static dictionary_t *users;
 static pthread_mutex_t lock;
 
@@ -58,7 +57,7 @@ int main(int argc, char **argv)
   pthread_mutex_init(&lock, NULL);
   users = make_dictionary(COMPARE_CASE_SENS,  free);
   listenfd = Open_listenfd(argv[1]);
-  server_portno = argv[1];
+  // server_portno = argv[1];
 
   /* Don't kill the server if there's an error, because
      we want to survive errors due to a client. But we
@@ -256,7 +255,7 @@ static void serve_request_friends(int fd, dictionary_t *query)
   pthread_mutex_lock(&lock);
   printf("Printing the query:\n");
 
-  print_stringdictionary(query);
+  // print_stringdictionary(query);
   char *user = dictionary_get(query, "user");
   printf("User: %s\n", user);
 
@@ -380,8 +379,6 @@ static void remove_friend_from_dict(dictionary_t* friend_of_users, char* user, c
 
 /*
  * /unfriend?user=‹user›&friends=‹friends›
- *
- *
  */
 static void serve_request_unfriend(int fd, dictionary_t *query){
   pthread_mutex_lock(&lock);
@@ -439,6 +436,7 @@ static void add_friend_to_dict_introduce(char* user, char** adding_friends){
   }
 }
 
+
 static void serve_request_introduce(int fd, dictionary_t *query){
   char* host = dictionary_get(query,"host");
   char *portno = dictionary_get(query,"port");
@@ -466,20 +464,8 @@ static void serve_request_introduce(int fd, dictionary_t *query){
                         CRLF, NULL);
 
   Rio_writen(s, buf, strlen(buf)); // Send buffer
-  Shutdown(s, SHUT_WR); // Leave half open
+  Shutdown(s, SHUT_WR); // Leave only reading-half open, because we won't be writing anymore
   Rio_readinitb(&rio, s);  // Receive result from host
-  // // From Echo concurrency slide
-  // int connfd;
-  // // size_t n;
-  // char buf[MAXLINE];
-  // rio_t rio;
-  // connfd = Open_clientfd(host, port);
-  //
-  // sprintf(buf, "GET /friends?user=%s HTTP/1.1\r\n\r\n", friend);
-  //
-  // Rio_writen(connfd, buf, strlen(buf));
-  // Shutdown(connfd, SHUT_WR); // Leave half open
-  // Rio_readinitb(&rio, connfd); // Keep using the same buffer
 
   dictionary_t *result_from_server = read_requesthdrs(&rio);
   size_t content_length = atoi(dictionary_get(result_from_server, "Content-length"));
@@ -500,12 +486,9 @@ static void serve_request_introduce(int fd, dictionary_t *query){
   free(adding_friends);
 
   char *body = join_strings(dictionary_keys(friend_of_users),'\n');
-
-  pthread_mutex_unlock(&lock);
   //Respond back to client
 
   // char *header;
-
   printf("Body:\n");
   printf("%s", body);
 
@@ -524,6 +507,7 @@ static void serve_request_introduce(int fd, dictionary_t *query){
   Rio_writen(fd, body, len);
 
   free(body);
+  pthread_mutex_unlock(&lock);
   Close(s);
 }
 
