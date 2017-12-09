@@ -26,7 +26,13 @@ static void serve_request_befriend(int fd, dictionary_t *query);
 static void serve_request_unfriend(int fd, dictionary_t *query);
 static void serve_request_introduce(int fd, dictionary_t *query);
 
-static dictionary_t* check_user_friend_existance(char* user, char* friend);
+static void handle_user_with_new_friend(dictionary_t* new_friends, char* user, char* friend);
+static void handle_new_friend_with_user(dictionary_t* friend_of_adding_friend, char* user, char* friend);
+static void add_friend_to_dict(char* user, char** adding_friends);
+static void remove_friend_from_dict(dictionary_t* friend_of_users, char* user, char** removing_friends);
+static void add_friend_to_dict_introduce(char* user, char** adding_friends);
+
+
 static char* server_portno;
 static dictionary_t *users;
 static pthread_mutex_t lock;
@@ -130,18 +136,12 @@ void *doit(void* fd_p)
 
       if (starts_with("/friends", uriquery)){
         printf("Sucess parsing URI\n");
-        pthread_mutex_lock(&lock);
         serve_request_friends(fd, query);
-        pthread_mutex_unlock(&lock);
       }else if(starts_with("/befriend", uriquery)){
         printf("Sucess parsing URI\n");
-        pthread_mutex_lock(&lock);
         serve_request_befriend(fd, query);
-        pthread_mutex_unlock(&lock);
       }else if(starts_with("/unfriend", uriquery)){
-        pthread_mutex_lock(&lock);
         serve_request_unfriend(fd, query);
-        pthread_mutex_unlock(&lock);
       }else if(starts_with("/introduce", uriquery)){
         serve_request_introduce(fd, query);
       }
@@ -253,6 +253,7 @@ static char *ok_header(size_t len, const char *content_type) {
  */
 static void serve_request_friends(int fd, dictionary_t *query)
 {
+  pthread_mutex_lock(&lock);
   printf("Printing the query:\n");
 
   print_stringdictionary(query);
@@ -283,14 +284,14 @@ static void serve_request_friends(int fd, dictionary_t *query)
 
   /* Send response body to client */
   Rio_writen(fd, body, len);
-
+  pthread_mutex_unlock(&lock);
   free(body);
 }
 
 static void handle_user_with_new_friend(dictionary_t* new_friends, char* user, char* friend){
   if (new_friends == NULL){
     new_friends = make_dictionary(COMPARE_CASE_SENS, free);
-    dictionary_set(users, user, new_friends);
+    dictionary_set(users, user, make_dictionary(COMPARE_CASE_SENS, free));
   }
 
   if (dictionary_get(new_friends, friend) == NULL){
@@ -314,7 +315,7 @@ static void add_friend_to_dict(char* user, char** adding_friends){
   // adding user in <freinds>
   for (i = total = 0; adding_friends[i] != NULL; i++){
     if(strcmp(user, adding_friends[i]) != 0){
-      printf("adding_friends:%s \n", adding_friends[i]);
+      // printf("adding_friends:%s \n", adding_friends[i]);
       dictionary_t* new_friends = dictionary_get(users, user);
       handle_user_with_new_friend(new_friends, user, adding_friends[i]);
 
@@ -325,18 +326,21 @@ static void add_friend_to_dict(char* user, char** adding_friends){
 }
 
 static void serve_request_befriend(int fd, dictionary_t *query){
+  pthread_mutex_lock(&lock);
   char *user = dictionary_get(query, "user");
-  printf("User form be-friend: %s\n", user);
+  printf("User from be-friend: %s\n", user);
+  char** adding_friends;
 
   dictionary_t* friend_of_users = dictionary_get(users, user);
   if (friend_of_users == NULL){
     dictionary_set(users, user, make_dictionary(COMPARE_CASE_SENS, free));
   }
 
-  char** adding_friends = split_string((char*)dictionary_get(query, "friends"), '\n');
+  adding_friends = split_string(dictionary_get(query, "friends"), '\n');
   add_friend_to_dict(user, adding_friends);
-
   friend_of_users = dictionary_get(users, user);
+
+  // Outputting the result
   size_t len;
   char *body, *header;
 
@@ -356,7 +360,7 @@ static void serve_request_befriend(int fd, dictionary_t *query){
 
   /* Send response body to client */
   Rio_writen(fd, body, len);
-
+  pthread_mutex_unlock(&lock);
   free(body);
 }
 
@@ -367,6 +371,7 @@ static void remove_friend_from_dict(dictionary_t* friend_of_users, char* user, c
     dictionary_remove(friend_of_users, removing_friends[i]);
     dictionary_t* removing_friends_dict = dictionary_get(users, removing_friends[i]);
 
+    // Deleting a friend
     if (removing_friends_dict != NULL){
       dictionary_remove(removing_friends_dict, user);
     }
@@ -379,19 +384,22 @@ static void remove_friend_from_dict(dictionary_t* friend_of_users, char* user, c
  *
  */
 static void serve_request_unfriend(int fd, dictionary_t *query){
+  pthread_mutex_lock(&lock);
   // parse_query(fd, query);
   char *user = dictionary_get(query, "user");
-  printf("User from be-friend: %s\n", user);
+  char** removing_friends;
+  // printf("User from be-friend: %s\n", user);
   dictionary_t* friend_of_users = dictionary_get(users, user);
 
   if (friend_of_users == NULL){
     dictionary_set(users, user, make_dictionary(COMPARE_CASE_SENS, free));
   }
 
-  char** removing_friends = split_string((char*)dictionary_get(query, "friends"), '\n');
+  removing_friends = split_string(dictionary_get(query, "friends"), '\n');
   remove_friend_from_dict(friend_of_users, user, removing_friends);
 
   friend_of_users = dictionary_get(users, user);
+
   size_t len;
   char *body, *header;
 
@@ -411,9 +419,10 @@ static void serve_request_unfriend(int fd, dictionary_t *query){
 
   /* Send response body to client */
   Rio_writen(fd, body, len);
-
+  pthread_mutex_unlock(&lock);
   free(body);
 }
+
 static void add_friend_to_dict_introduce(char* user, char** adding_friends){
   size_t i, total;
   // adding user in <freinds>
@@ -429,35 +438,55 @@ static void add_friend_to_dict_introduce(char* user, char** adding_friends){
     free(adding_friends[i]);
   }
 }
+
 static void serve_request_introduce(int fd, dictionary_t *query){
   char* host = dictionary_get(query,"host");
-  char *port = dictionary_get(query,"port");
-  char *friend = dictionary_get(query,"friend");
+  char *portno = dictionary_get(query,"port");
+
   char *user = dictionary_get(query,"user");
+  char *friend = dictionary_get(query,"friend");
 
-  // From Echo concurrency slide
-  int connfd;
-  size_t n;
-  char buf[MAXLINE];
   rio_t rio;
-  connfd = Open_clientfd(host, port);
+  char *buf;
 
-  sprintf(buf, "GET /friends?user=%s HTTP/1.1\r\n\r\n", friend);
+  // From TCP Slide
+  struct addrinfo hints;
+  struct addrinfo *addrs;
+  memset(&hints, 0, sizeof(struct addrinfo));
+  hints.ai_family = AF_INET; /* Request IPv4 */
+  hints.ai_socktype = SOCK_STREAM; /* Accept TCP connection */
+  // hints.ai_flags = AI_PASSIVE; /* ... on any IP address */
+  Getaddrinfo(host, portno, &hints, &addrs);
 
-  n = strlen(buf);
-  Rio_writen(connfd, buf, n);
-  Shutdown(connfd, SHUT_WR); // Leave half open
+  int s = Socket(addrs->ai_family, addrs->ai_socktype, addrs->ai_protocol);
+  Connect(s, addrs->ai_addr, addrs->ai_addrlen);
+  Freeaddrinfo(addrs);
 
-  Rio_readinitb(&rio, connfd); // Keep using the same buffer
+  buf = append_strings("GET /friends?user=", friend," HTTP/1.1\r\n",
+                        CRLF, NULL);
 
-  dictionary_t *result = read_requesthdrs(&rio);
+  Rio_writen(s, buf, strlen(buf)); // Send buffer
+  Shutdown(s, SHUT_WR); // Leave half open
+  Rio_readinitb(&rio, s);  // Receive result from host
+  // // From Echo concurrency slide
+  // int connfd;
+  // // size_t n;
+  // char buf[MAXLINE];
+  // rio_t rio;
+  // connfd = Open_clientfd(host, port);
+  //
+  // sprintf(buf, "GET /friends?user=%s HTTP/1.1\r\n\r\n", friend);
+  //
+  // Rio_writen(connfd, buf, strlen(buf));
+  // Shutdown(connfd, SHUT_WR); // Leave half open
+  // Rio_readinitb(&rio, connfd); // Keep using the same buffer
 
+  dictionary_t *result_from_server = read_requesthdrs(&rio);
+  size_t content_length = atoi(dictionary_get(result_from_server, "Content-length"));
 
-  size_t len = atoi(dictionary_get(result, "Content-length"));
-  char rec_buf[len];
-
-  Rio_readnb(&rio, rec_buf, len);
-  rec_buf[len] = 0;
+  char content_buf[content_length];
+  Rio_readnb(&rio, content_buf, content_length);
+  content_buf[content_length] = 0;
 
   pthread_mutex_lock(&lock);
 
@@ -466,7 +495,7 @@ static void serve_request_introduce(int fd, dictionary_t *query){
     dictionary_set(users, user, make_dictionary(COMPARE_CASE_SENS,NULL));
   }
 
-  char** adding_friends = split_string(rec_buf, '\n');
+  char** adding_friends = split_string(content_buf, '\n');
   add_friend_to_dict_introduce(user, adding_friends);
   free(adding_friends);
 
@@ -475,15 +504,16 @@ static void serve_request_introduce(int fd, dictionary_t *query){
   pthread_mutex_unlock(&lock);
   //Respond back to client
 
-  char *header;
+  // char *header;
 
   printf("Body:\n");
   printf("%s", body);
 
+  size_t len;
   len = strlen(body);
 
   /* Send response headers to client */
-  header = ok_header(len, "text/html; charset=utf-8");
+  char* header = ok_header(len, "text/html; charset=utf-8");
   Rio_writen(fd, header, strlen(header));
   printf("Response headers:\n");
   printf("%s", header);
@@ -494,7 +524,7 @@ static void serve_request_introduce(int fd, dictionary_t *query){
   Rio_writen(fd, body, len);
 
   free(body);
-  Close(connfd);
+  Close(s);
 }
 
 /*
